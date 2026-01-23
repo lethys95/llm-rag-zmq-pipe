@@ -1,0 +1,114 @@
+version: '3.8'
+
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: llm_rag_qdrant
+    ports:
+      - "6333:6333"  # REST API
+      - "6334:6334"  # gRPC API (optional)
+    volumes:
+      - ./data/qdrant_storage:/qdrant/storage
+    environment:
+      # Qdrant configuration
+      - QDRANT__SERVICE__HTTP_PORT=6333
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:6333/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - llm_rag_network
+
+  # CPU-optimized application (default)
+  llm-rag-pipe:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production-cpu
+    container_name: llm_rag_pipe_cpu
+    ports:
+      - "5555:5555"  # ZMQ ROUTER input
+      - "5556:5556"  # ZMQ PUSH output
+    volumes:
+      - ./data:/app/data                    # Conversation storage + SQLite
+      - ./models:/app/models                # Local models (if using llama provider)
+      - ./config:/app/config:ro             # Configuration files (read-only)
+      - sentence-transformers-cache:/home/appuser/.cache/torch/sentence_transformers  # Model cache
+    environment:
+      # Required: OpenRouter API key
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      
+      # Optional: Override endpoints  
+      - LLM_RAG_PIPE_INPUT_ADDRESS=${LLM_RAG_PIPE_INPUT_ADDRESS:-tcp://*:5555}
+      - LLM_RAG_PIPE_OUTPUT_ADDRESS=${LLM_RAG_PIPE_OUTPUT_ADDRESS:-tcp://*:5556}
+      
+      # Optional: Logging and configuration
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - CONFIG_FILE=${CONFIG_FILE:-}
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - llm_rag_network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import zmq; ctx = zmq.Context(); sock = ctx.socket(zmq.REQ); sock.connect('tcp://localhost:5555'); sock.close(); ctx.term()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # GPU-enabled application (optional, use with --profile gpu)
+  llm-rag-pipe-gpu:
+    profiles: ["gpu"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production-gpu
+    container_name: llm_rag_pipe_gpu
+    ports:
+      - "5555:5555"  # ZMQ ROUTER input
+      - "5556:5556"  # ZMQ PUSH output
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./config:/app/config:ro
+      - sentence-transformers-cache:/home/appuser/.cache/torch/sentence_transformers
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - LLM_RAG_PIPE_INPUT_ADDRESS=${LLM_RAG_PIPE_INPUT_ADDRESS:-tcp://*:5555}
+      - LLM_RAG_PIPE_OUTPUT_ADDRESS=${LLM_RAG_PIPE_OUTPUT_ADDRESS:-tcp://*:5556}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - CONFIG_FILE=${CONFIG_FILE:-}
+      - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - llm_rag_network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import zmq; ctx = zmq.Context(); sock = ctx.socket(zmq.REQ); sock.connect('tcp://localhost:5555'); sock.close(); ctx.term()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  llm_rag_network:
+    name: llm_rag_network
+
+volumes:
+  sentence-transformers-cache:
+    name: sentence_transformers_cache
