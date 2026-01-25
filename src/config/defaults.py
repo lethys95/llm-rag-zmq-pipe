@@ -46,11 +46,28 @@ DEFAULT_CONFIG: dict[str, any] = {
     "conversation_db_max_messages": 200,
     "conversation_context_limit": 15,
     
+    # Memory decay parameters
     "memory_half_life_days": 30.0,
     "chrono_weight": 1.0,
     "memory_retrieval_threshold": 0.15,
     "memory_prune_threshold": 0.05,
     "max_context_documents": 25,
+    
+    # Detox protocol parameters
+    "detox_idle_trigger_minutes": 60,
+    "detox_min_interval_minutes": 120,
+    "detox_max_duration_minutes": 30,
+    
+    # Nudging algorithm parameters
+    "nudge_strength": 0.15,
+    "max_companion_drift": 0.3,
+    "base_user_influence": 0.3,
+    "base_companion_influence": 0.7,
+    "max_trust_boost": 0.3,
+    
+    # Memory consolidation parameters
+    "consolidation_threshold": 0.7,
+    "max_memories_per_batch": 10,
     
     "enable_sentiment_analysis": True,
     "enable_context_interpreter": True,

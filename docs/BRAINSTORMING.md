@@ -47,3 +47,5 @@ Anthropomorphization is a feature not a bug. How can we use it in a way which is
 Character consitency - Would the AI companion say this? Does it fall outside of what would be natural for the companion to say?
 -----------------------------------
 Boundaries - The AI itself must have boundaries to seem realistic, but also to have the user remember that people also have boundaries. That doesn't mean that things can't get personal and heated, but the companion must've given... Well, given consent.
+------------------------------------
+Scheduler - Time based events which starts conversations on phone and the like. Useful to motivate yourself into doing various tasks.

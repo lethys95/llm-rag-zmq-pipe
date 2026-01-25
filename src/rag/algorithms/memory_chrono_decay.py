@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timezone
 from math import exp, log
 
-from ..selector import RAGDocument
+from src.rag.selector import RAGDocument
 
 logger = logging.getLogger(__name__)
 

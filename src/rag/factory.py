@@ -2,10 +2,10 @@
 
 import logging
 
-from ..config.settings import Settings
-from .base import BaseRAG
-from .qdrant_connector import QdrantRAG
-from .selector import RAGSelector
+from src.config.settings import Settings
+from src.rag.base import BaseRAG
+from src.rag.qdrant_connector import QdrantRAG
+from src.rag.selector import RAGSelector
 
 logger = logging.getLogger(__name__)
 

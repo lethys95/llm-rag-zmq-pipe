@@ -2,12 +2,9 @@
 
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import Self
 
-from .result import NodeResult, NodeStatus
-
-if TYPE_CHECKING:
-    from .knowledge_broker import KnowledgeBroker
+from src.nodes.core.result import NodeResult
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +52,7 @@ class BaseNode(ABC):
         )
     
     @abstractmethod
-    async def execute(self, broker: "KnowledgeBroker") -> NodeResult:
+    async def execute(self, broker) -> NodeResult:
         """Execute the node's primary logic.
         
         This method must be implemented by all concrete nodes. It should:
@@ -72,7 +69,7 @@ class BaseNode(ABC):
         """
         pass
     
-    def should_run(self, broker: "KnowledgeBroker") -> bool:
+    def should_run(self, broker) -> bool:
         """Determine if this node should run based on current context.
         
         Override this method to implement conditional execution logic.
@@ -108,7 +105,7 @@ class BaseNode(ABC):
         
         return True
     
-    def __lt__(self, other: "BaseNode") -> bool:
+    def __lt__(self, other: Self) -> bool:
         """Compare nodes by priority for queue ordering.
         
         Lower priority number = higher precedence (executes first).

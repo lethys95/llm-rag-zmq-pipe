@@ -2,10 +2,10 @@
 
 import logging
 
-from ..config.settings import Settings
-from .base import BaseLLM
-from .llama_local import LlamaLocalLLM
-from .openrouter import OpenRouterLLM
+from src.config.settings import Settings
+from src.llm.base import BaseLLM
+from src.llm.llama_local import LlamaLocalLLM
+from src.llm.openrouter import OpenRouterLLM
 
 logger = logging.getLogger(__name__)
 

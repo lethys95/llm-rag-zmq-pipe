@@ -47,6 +47,15 @@ class MemoryDecayConfig:
 
 
 @dataclass
+class DetoxConfig:
+    """Configuration for detox protocol."""
+    
+    idle_trigger_minutes: int
+    min_interval_minutes: int
+    max_duration_minutes: int
+
+
+@dataclass
 class Settings:
     """Application settings with type validation."""
     
@@ -71,6 +80,7 @@ class Settings:
     qdrant: QdrantConfig
     conversation_store: ConversationStoreConfig
     memory_decay: MemoryDecayConfig
+    detox: DetoxConfig
     
     enable_sentiment_analysis: bool
     enable_context_interpreter: bool
@@ -131,6 +141,21 @@ class Settings:
         if self.memory_decay.max_documents <= 0:
             raise ValueError(
                 f"memory_decay.max_documents must be positive, got {self.memory_decay.max_documents}"
+            )
+        
+        if self.detox.idle_trigger_minutes <= 0:
+            raise ValueError(
+                f"detox.idle_trigger_minutes must be positive, got {self.detox.idle_trigger_minutes}"
+            )
+        
+        if self.detox.min_interval_minutes <= 0:
+            raise ValueError(
+                f"detox.min_interval_minutes must be positive, got {self.detox.min_interval_minutes}"
+            )
+        
+        if self.detox.max_duration_minutes <= 0:
+            raise ValueError(
+                f"detox.max_duration_minutes must be positive, got {self.detox.max_duration_minutes}"
             )
         
         if self.n_ctx <= 0:

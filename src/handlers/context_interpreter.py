@@ -3,8 +3,8 @@
 import logging
 from textwrap import dedent
 
-from ..llm.base import BaseLLM
-from ..rag.selector import RAGDocument
+from src.llm.base import BaseLLM
+from src.rag.selector import RAGDocument
 
 logger = logging.getLogger(__name__)
 

@@ -3,13 +3,18 @@
 import asyncio
 import logging
 import time
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
 
-from .result import NodeStatus
+from src.nodes.core.base import BaseNode
+from src.nodes.orchestration.knowledge_broker import KnowledgeBroker
 
-if TYPE_CHECKING:
-    from .base import BaseNode
-    from .knowledge_broker import KnowledgeBroker
+@dataclass
+class QueueStatus:
+    immediate_queue_size: int
+    background_queue_size: int
+    completed_nodes: int
+    failed_nodes: int
+    waiting_nodes: int
 
 logger = logging.getLogger(__name__)
 
@@ -37,11 +42,11 @@ class TaskQueueManager:
         self.background_queue: asyncio.PriorityQueue = asyncio.PriorityQueue()
         self.completed_nodes: set[str] = set()
         self.failed_nodes: set[str] = set()
-        self.waiting_nodes: list["BaseNode"] = []
+        self.waiting_nodes: list[BaseNode] = []
         
         logger.debug("Task queue manager initialized")
     
-    async def enqueue(self, node: "BaseNode") -> None:
+    async def enqueue(self, node: BaseNode) -> None:
         """Add a node to the appropriate queue.
         
         Args:
@@ -62,7 +67,7 @@ class TaskQueueManager:
             f"(priority={node.priority})"
         )
     
-    async def execute_immediate(self, broker: "KnowledgeBroker") -> None:
+    async def execute_immediate(self, broker: KnowledgeBroker) -> None:
         """Execute all immediate nodes, blocking until complete.
         
         This processes nodes in priority order, respecting dependencies.
@@ -111,7 +116,7 @@ class TaskQueueManager:
             f"{len(self.failed_nodes)} failed"
         )
     
-    async def execute_background(self, broker: "KnowledgeBroker") -> None:
+    async def execute_background(self, broker: KnowledgeBroker) -> None:
         """Execute background nodes without blocking.
         
         This is meant to be called with asyncio.create_task() to run
@@ -143,7 +148,7 @@ class TaskQueueManager:
         
         logger.info(f"Background execution complete: {node_count} nodes processed")
     
-    async def _process_waiting_nodes(self, broker: "KnowledgeBroker") -> None:
+    async def _process_waiting_nodes(self, broker: KnowledgeBroker) -> None:
         """Check waiting nodes and execute those whose dependencies are now met.
         
         Args:
@@ -166,8 +171,8 @@ class TaskQueueManager:
     
     async def _execute_node(
         self,
-        node: "BaseNode",
-        broker: "KnowledgeBroker"
+        node: BaseNode,
+        broker: KnowledgeBroker
     ) -> None:
         """Execute a single node and handle its result.
         
@@ -202,9 +207,7 @@ class TaskQueueManager:
                 self.completed_nodes.add(node.name)
                 broker.record_node_execution(node.name, "success", duration)
                 
-                # Add data to broker
-                for key, value in result.data.items():
-                    broker.add_knowledge(key, value, node_name=node.name)
+                # Data is handled by nodes directly setting broker attributes
                 
                 # Enqueue any next nodes
                 for next_node in result.next_nodes:
@@ -259,16 +262,16 @@ class TaskQueueManager:
         
         logger.debug("Task queue manager reset")
     
-    def get_status(self) -> dict[str, any]:
+    def get_status(self) -> QueueStatus:
         """Get current status of the queue manager.
         
         Returns:
-            Dictionary with queue sizes and execution status
+            QueueStatus dataclass with queue sizes and execution status
         """
-        return {
-            "immediate_queue_size": self.immediate_queue.qsize(),
-            "background_queue_size": self.background_queue.qsize(),
-            "completed_nodes": len(self.completed_nodes),
-            "failed_nodes": len(self.failed_nodes),
-            "waiting_nodes": len(self.waiting_nodes),
-        }
+        return QueueStatus(
+            immediate_queue_size=self.immediate_queue.qsize(),
+            background_queue_size=self.background_queue.qsize(),
+            completed_nodes=len(self.completed_nodes),
+            failed_nodes=len(self.failed_nodes),
+            waiting_nodes=len(self.waiting_nodes),
+        )

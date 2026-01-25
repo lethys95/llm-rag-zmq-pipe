@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 from .config.loader import load_config
-from .pipeline.server import PipelineServer
+from .orchestrator import Orchestrator
 from .utils.logger import setup_logging
 
 
@@ -242,9 +242,9 @@ def _run_server(cli_args: dict, config_file: Optional[Path]) -> None:
         # Set up logging
         setup_logging(settings.log_level)
         
-        # Create and run pipeline server
-        server = PipelineServer(settings)
-        server.run()
+        # Create and run orchestrator
+        orchestrator = Orchestrator(settings)
+        orchestrator.run()
         
     except ValueError as e:
         click.echo(f"Configuration error: {e}", err=True)

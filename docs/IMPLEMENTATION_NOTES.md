@@ -153,20 +153,48 @@ Background Nodes         Primary Response Node
 - Priority: 5 (after response)
 - Background: True
 
-## Phase 3: Rewrite Server (NEXT SESSION)
+## Phase 3: Rewrite Server (COMPLETED)
 
-### 3.1 New `NodeExecutionServer`
-- Replace sequential logic with queue-based execution
-- Create `KnowledgeBroker` per request
-- Use `DecisionEngine` to select nodes
-- Use `TaskQueueManager` to execute
-- Return response after immediate nodes complete
-- Background nodes continue async
+### 3.1 Refactoring Complete ✅
+- **Renamed**: `src/pipeline/` → `src/communication/`
+- **Deleted**: `src/pipeline/server.py` (old PipelineServer)
+- **Created**: `src/orchestrator.py` (new node-based orchestrator)
+- **Created**: `src/communication/zmq_connection_manager.py` (persistent socket manager)
+- **Created**: `src/nodes/communication_nodes/` (ZMQ message handling nodes)
+  - `ReceiveMessageNode` - Parse incoming messages
+  - `SendAcknowledgmentNode` - Send ACKs via ROUTER
+  - `ForwardResponseNode` - Forward via DEALER
+  - `CheckFeedbackNode` - Check downstream feedback
+- **Updated**: `src/cli.py` to use Orchestrator instead of PipelineServer
 
-### 3.2 Backwards Compatibility
-- Keep same ZMQ interface
-- Keep same response format
-- Migration should be transparent to clients
+### 3.2 Architecture Changes
+**Old Pipeline (Sequential)**:
+```
+Receive → Sentiment → RAG → Response → ACK → Forward
+```
+
+**New Node System (Dynamic)**:
+```
+ZMQConnectionManager (persistent sockets)
+    ↓
+Orchestrator (main loop)
+    ↓
+ReceiveMessageNode → KnowledgeBroker
+    ↓
+[Sentiment + Primary handlers - temporary, to be wrapped in Phase 2]
+    ↓
+SendAcknowledgmentNode + ForwardResponseNode + CheckFeedbackNode
+    ↓
+(via TaskQueueManager)
+```
+
+### 3.3 Backwards Compatibility ✅
+- Same ZMQ interface (ROUTER/DEALER)
+- Same response format
+- Same CLI commands (remote/local)
+- Migration is transparent to clients
+
+**✅ Phase 3 COMPLETE - Pipeline successfully removed!**
 
 ## Phase 4: Add New Nodes (FUTURE SESSIONS)
 

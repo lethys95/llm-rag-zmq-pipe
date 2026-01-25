@@ -57,7 +57,7 @@ class EmbeddingService:
                         from sentence_transformers import SentenceTransformer
                         logger.info(f"Loading sentence-transformers model: {self.model_name}")
                         self.model = SentenceTransformer(self.model_name)
-                        logger.info(f"Model loaded successfully")
+                        logger.info("Model loaded successfully")
                     except ImportError:
                         logger.error(
                             "sentence-transformers not installed. "

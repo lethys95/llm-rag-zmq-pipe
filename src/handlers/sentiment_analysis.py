@@ -7,10 +7,10 @@ from textwrap import dedent
 from datetime import datetime
 from pydantic import ValidationError
 
-from ..llm.base import BaseLLM
-from ..rag.base import BaseRAG
-from ..rag.embeddings import EmbeddingService
-from ..models.sentiment import SentimentAnalysis
+from src.llm.base import BaseLLM
+from src.rag.base import BaseRAG
+from src.rag.embeddings import EmbeddingService
+from src.models.sentiment import SentimentAnalysis
 
 logger = logging.getLogger(__name__)
 

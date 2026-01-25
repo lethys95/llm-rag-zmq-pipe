@@ -1,8 +1,11 @@
 """Node execution result types."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+
+from src.nodes.core.node_protocol import NodeProtocol
 
 
 class NodeStatus(str, Enum):
@@ -16,21 +19,13 @@ class NodeStatus(str, Enum):
 
 @dataclass
 class NodeResult:
-    """Result from node execution.
-    
-    Attributes:
-        status: Execution status (SUCCESS, FAILED, SKIPPED, PARTIAL)
-        data: Data produced by the node (stored in broker)
-        error: Error message if failed, None otherwise
-        next_nodes: List of node instances to enqueue based on this result
-        metadata: Additional metadata about execution
-    """
+    """Result from node execution."""
     
     status: NodeStatus
-    data: dict[str, Any] = field(default_factory=dict)
+    data: dict = field(default_factory=dict)
     error: str | None = None
-    next_nodes: list[Any] = field(default_factory=list)  # List of BaseNode instances
-    metadata: dict[str, Any] = field(default_factory=dict)
+    next_nodes: list[NodeProtocol] = field(default_factory=list)
+    metadata: dict = field(default_factory=dict)
     
     def is_success(self) -> bool:
         """Check if execution was successful."""

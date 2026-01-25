@@ -6,7 +6,7 @@ import json
 import msgpack
 from pydantic import ValidationError
 
-from ..models import DialogueInput
+from src.models import DialogueInput
 
 logger = logging.getLogger(__name__)
 

@@ -1,6 +1,7 @@
 """Qdrant vector database RAG implementation."""
 
 import logging
+import uuid
 from typing import Any
 from datetime import datetime
 
@@ -125,7 +126,6 @@ class QdrantRAG(BaseRAG):
             payload["timestamp"] = payload.get("timestamp", datetime.now().isoformat())
             
             # Generate ID if not provided
-            import uuid
             pid = point_id or str(uuid.uuid4())
             
             # Create point
@@ -321,6 +321,42 @@ class QdrantRAG(BaseRAG):
         except Exception as e:
             logger.error(f"Error counting documents: {e}", exc_info=True)
             return 0
+    
+    def update_access_count(self, point_id: str) -> None:
+        """Increment access count for a document.
+        
+        Args:
+            point_id: The point ID to update
+        """
+        try:
+            # Retrieve the point
+            points = self.client.retrieve(
+                collection_name=self.collection_name,
+                ids=[point_id]
+            )
+            
+            if not points:
+                logger.warning(f"Point {point_id} not found for access update")
+                return
+            
+            point = points[0]
+            payload = point.payload
+            
+            # Update access count
+            payload["access_count"] = payload.get("access_count", 0) + 1
+            payload["last_accessed"] = datetime.now().isoformat()
+            
+            # Update in Qdrant
+            self.client.set_payload(
+                collection_name=self.collection_name,
+                payload=payload,
+                points=[point_id]
+            )
+            
+            logger.debug(f"Updated access count for point {point_id}")
+            
+        except Exception as e:
+            logger.error(f"Error updating access count: {e}", exc_info=True)
     
     def close(self) -> None:
         """Clean up resources and close connections.

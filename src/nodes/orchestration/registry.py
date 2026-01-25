@@ -1,10 +1,15 @@
 """Node registry for managing available execution nodes."""
 
 import logging
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from src.nodes.core.base import BaseNode
 
-if TYPE_CHECKING:
-    from .base import BaseNode
+@dataclass
+class NodeInfo:
+    name: str
+    class_name: str
+    module: str
+    docstring: str | None
 
 logger = logging.getLogger(__name__)
 
@@ -121,14 +126,14 @@ class NodeRegistry:
         """
         return list(self._nodes.keys())
     
-    def get_node_info(self, name: str) -> dict[str, any]:
+    def get_node_info(self, name: str) -> NodeInfo:
         """Get metadata about a registered node.
         
         Args:
             name: Name of the node
             
         Returns:
-            Dictionary with node metadata
+            NodeInfo dataclass with node metadata
             
         Raises:
             KeyError: If node name is not registered
@@ -138,12 +143,12 @@ class NodeRegistry:
         
         node_class = self._nodes[name]
         
-        return {
-            "name": name,
-            "class_name": node_class.__name__,
-            "module": node_class.__module__,
-            "docstring": node_class.__doc__,
-        }
+        return NodeInfo(
+            name=name,
+            class_name=node_class.__name__,
+            module=node_class.__module__,
+            docstring=node_class.__doc__,
+        )
     
     def clear(self) -> None:
         """Clear all registered nodes.

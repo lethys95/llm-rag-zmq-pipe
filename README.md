@@ -14,6 +14,11 @@ A professionally architected ZMQ-based pipeline for LLM (Large Language Model) a
 - ⚙️ **Flexible Configuration**: Cascading config system (CLI → file → defaults)
 - 🎯 **Clean Architecture**: Separation of concerns, SOLID principles, high cohesion and loose coupling
 - 📊 **Comprehensive Logging**: Detailed logging at all levels for debugging and monitoring
+- 🧩 **Node-Based Architecture**: Dynamic node selection and execution for flexible processing
+- 🤝 **Trust Analysis**: Multi-factor trust scoring for relationship maturity tracking
+- 🔄 **Memory Evaluation**: AI-driven memory importance assessment with dynamic scoring
+- 🧹 **Detox Protocol**: Background self-correction to prevent sycophancy and drift
+- 📅 **Task Scheduling**: Periodic background tasks for maintenance and optimization
 
 
 ## Advanced Features
@@ -55,6 +60,63 @@ An intermediate LLM handler that:
 - **Qdrant**: Semantic vector search across all conversations
 - **Automatic synchronization** between both storage tiers
 - **Integrated embeddings** using sentence-transformers
+
+### Node-Based Architecture
+
+The system uses a flexible node-based architecture where:
+
+- **Dynamic Node Selection**: Decision engine selects appropriate nodes based on context
+- **Priority-Based Execution**: Nodes execute based on priority and queue type
+- **Background Processing**: Long-running tasks execute asynchronously
+- **Extensible Design**: Easy to add new processing nodes
+
+Available nodes include:
+- `sentiment_analysis`: Analyze emotional tone and sentiment
+- `trust_analysis`: Evaluate user trust and relationship maturity
+- `memory_evaluator`: Re-evaluate memory importance in current context
+- `primary_response`: Generate the main response
+- `detox_session`: Background self-correction protocol
+
+### Trust Analysis
+
+Multi-factor trust scoring system that tracks:
+
+- **Relationship Age**: How long the user has been interacting
+- **Interaction Frequency**: How often the user engages
+- **Positive/Negative Ratio**: Balance of positive vs negative interactions
+- **Consistency Score**: Variance in sentiment patterns
+- **Depth Score**: Content analysis for interaction depth
+
+Trust scores (0.0-1.0) are used to:
+- Adjust memory importance weighting
+- Influence nudging algorithm behavior
+- Guide response personalization
+
+### Memory Evaluation
+
+AI-driven memory importance assessment that:
+
+- **Re-evaluates memories** in current conversation context
+- **Considers trust level** when scoring importance
+- **Tracks access patterns** for relevance scoring
+- **Applies dynamic boosts** to important memories
+- **Provides reasoning** for evaluation decisions
+
+### Detox Protocol
+
+Background self-correction system that:
+
+- **Triggers during idle time** (configurable)
+- **Runs nudging algorithm** to prevent sycophancy
+- **Consolidates similar memories** for efficiency
+- **Stores companion state** in RAG for persistence
+- **Generates guidance** for future conversations
+
+The detox protocol helps maintain:
+- Balanced, grounded responses
+- Reduced extremism over time
+- Healthy user-companion relationship
+- Efficient memory management
 
 ## Installation
 
@@ -225,6 +287,31 @@ Each LLM component (primary, sentiment, interpreter) can be configured independe
 | `memory_decay.prune_threshold` | Score below which to prune | `0.1` |
 | `memory_decay.max_documents` | Max documents to retrieve | `10` |
 
+### Detox Configuration
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `detox.idle_trigger_minutes` | Minutes of inactivity before triggering detox | `60` |
+| `detox.min_interval_minutes` | Minimum minutes between detox sessions | `120` |
+| `detox.max_duration_minutes` | Maximum duration of a detox session | `30` |
+
+### Nudging Algorithm Configuration
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `nudge_strength` | Strength of nudging adjustments | `0.15` |
+| `max_companion_drift` | Maximum allowed companion drift | `0.3` |
+| `base_user_influence` | Base influence of user position | `0.3` |
+| `base_companion_influence` | Base influence of companion position | `0.7` |
+| `max_trust_boost` | Maximum trust-based boost | `0.3` |
+
+### Memory Consolidation Configuration
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `consolidation_threshold` | Similarity threshold for consolidation | `0.7` |
+| `max_memories_per_batch` | Max memories to consolidate per batch | `10` |
+
 ### Qdrant Configuration
 
 | Option | Description | Default |
@@ -262,11 +349,23 @@ Create a `config.json` file:
   "enable_context_interpreter": true,
   "rag_enabled": true,
   "memory_decay": {
-    "half_life_days": 7.0,
-    "max_documents": 10
-  },
-  "log_level": "INFO"
-}
+     "half_life_days": 7.0,
+     "max_documents": 10
+   },
+   "detox": {
+     "idle_trigger_minutes": 60,
+     "min_interval_minutes": 120,
+     "max_duration_minutes": 30
+   },
+   "nudge_strength": 0.15,
+   "max_companion_drift": 0.3,
+   "base_user_influence": 0.3,
+   "base_companion_influence": 0.7,
+   "max_trust_boost": 0.3,
+   "consolidation_threshold": 0.7,
+   "max_memories_per_batch": 10,
+   "log_level": "INFO"
+ }
 ```
 
 ## Usage
@@ -396,16 +495,20 @@ print(f"Response: {response}")
 ## Pipeline Flow
 
 1. **Request Reception**: ZMQ ROUTER socket receives DialogueInput from client
-2. **Sentiment Analysis**: Optional sentiment analysis with relevance scoring
-3. **Context Retrieval**: 
+2. **Node Selection**: Decision engine selects appropriate processing nodes
+3. **Sentiment Analysis**: Analyze emotional tone and sentiment
+4. **Trust Analysis**: Evaluate user trust (periodically, every 10th message)
+5. **Context Retrieval**:
    - Recent messages from SQLite conversation store
    - Semantic search in Qdrant with memory decay scoring
    - Combined using memory decay algorithm
-4. **Context Interpretation**: Optional LLM-powered context reformulation
-5. **Response Generation**: Primary LLM generates response using retrieved context
-6. **Storage**: Conversation stored in both SQLite and Qdrant with embeddings
-7. **Acknowledgment**: Server sends ACK with sentiment info back via ROUTER
-8. **Response Forwarding**: Final response forwarded via PUSH socket
+6. **Memory Evaluation**: Re-evaluate memory importance (if documents retrieved)
+7. **Context Interpretation**: Optional LLM-powered context reformulation
+8. **Response Generation**: Primary LLM generates response using retrieved context
+9. **Storage**: Conversation stored in both SQLite and Qdrant with embeddings
+10. **Acknowledgment**: Server sends ACK with sentiment info back via ROUTER
+11. **Response Forwarding**: Final response forwarded via PUSH socket
+12. **Background Tasks**: Detox protocol runs during idle periods
 
 ## Examples
 
@@ -445,6 +548,8 @@ See the `examples/` directory for comprehensive working examples:
 
 - [Memory Decay Algorithm](docs/MEMORY_DECAY_ALGORITHM.md) - Detailed algorithm implementation
 - [Testing Guide](docs/TESTING.md) - Testing infrastructure and practices
+- [Implementation Progress](docs/IMPLEMENTATION_PROGRESS.md) - Phase 2 completion status
+- [Detox Protocol](docs/algorithms/DETOX_PROTOCOL.md) - Background self-correction system
 
 ## Future Enhancements
 
@@ -454,6 +559,9 @@ See the `examples/` directory for comprehensive working examples:
 - [ ] Health check endpoints
 - [ ] Multi-user conversation isolation
 - [ ] Advanced caching strategies
+- [ ] Adaptive detox scheduling based on usage patterns
+- [ ] Multi-user trust tracking
+- [ ] Memory importance auto-adjustment
 
 ## License
 

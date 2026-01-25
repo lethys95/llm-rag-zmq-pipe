@@ -5,7 +5,7 @@ import os
 
 import requests
 
-from .base import BaseLLM
+from .base import BaseLLM, ToolCall, LLMResponse
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +119,74 @@ class OpenRouterLLM(BaseLLM):
             logger.error(f"OpenRouter API request failed: {e}")
             raise
     
+    def generate_with_tools(
+        self,
+        prompt: str,
+        tools: list[dict],
+        tool_choice: dict | str | None = None
+    ) -> LLMResponse:
+        """Generate a response with function calling support.
+        
+        Args:
+            prompt: The input prompt
+            tools: List of tool/function definitions following OpenAI format
+            tool_choice: Optional tool choice constraint (e.g., {"type": "function", "function": {"name": "select_nodes"}})
+            
+        Returns:
+            LLMResponse with content and tool_calls
+            
+        Raises:
+            Exception: If API request fails
+        """
+        logger.debug(f"Generating response with tools for prompt: {prompt[:100]}...")
+        
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        
+        payload = {
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ],
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "tools": tools,
+        }
+        
+        if tool_choice:
+            payload["tool_choice"] = tool_choice
+        
+        # Add provider configuration if specified
+        if self.provider or self.provider_sort:
+            provider_config = {}
+            
+            if self.provider:
+                provider_config["only"] = [self.provider]
+            
+            if self.provider_sort:
+                provider_config["sort"] = self.provider_sort
+            
+            if self.provider_allow_fallbacks is not None:
+                provider_config["allow_fallbacks"] = self.provider_allow_fallbacks
+            
+            payload["provider"] = provider_config
+        
+        try:
+            response = self._make_request(headers, payload)
+            result = self._extract_response_with_tools(response)
+            
+            logger.debug(f"Generated response with {len(result.tool_calls)} tool calls")
+            return result
+            
+        except Exception as e:
+            logger.error(f"OpenRouter API request with tools failed: {e}")
+            raise
+    
     def _make_request(self, headers: dict, payload: dict) -> dict:
         """Make HTTP request to OpenRouter API.
         
@@ -146,6 +214,7 @@ class OpenRouterLLM(BaseLLM):
             logger.error(f"Request payload: {payload}")
         
         response.raise_for_status()
+        
         return response.json()
     
     def _extract_response(self, response: dict) -> str:
@@ -174,6 +243,41 @@ class OpenRouterLLM(BaseLLM):
                 logger.warning("Response was truncated due to length limit!")
             
             return content
+        except (KeyError, IndexError) as e:
+            logger.error(f"Unexpected API response format: {response}")
+            raise ValueError(f"Unexpected API response format: {e}")
+    
+    def _extract_response_with_tools(self, response: dict) -> LLMResponse:
+        """Extract response with tool calls from API response.
+        
+        Args:
+            response: API response dictionary
+            
+        Returns:
+            LLMResponse with content and tool_calls
+            
+        Raises:
+            KeyError: If response format is unexpected
+        """
+        try:
+            message = response["choices"][0]["message"]
+            
+            content = message.get("content", "")
+            tool_calls_raw = message.get("tool_calls", [])
+            
+            tool_calls = []
+            for tool_call in tool_calls_raw:
+                tool_calls.append(
+                    ToolCall(
+                        function_name=tool_call["function"]["name"],
+                        arguments=tool_call["function"],
+                        call_id=tool_call.get("id")
+                    )
+                )
+            
+            logger.debug(f"Extracted {len(tool_calls)} tool calls")
+            return LLMResponse(content=content, tool_calls=tool_calls)
+            
         except (KeyError, IndexError) as e:
             logger.error(f"Unexpected API response format: {response}")
             raise ValueError(f"Unexpected API response format: {e}")

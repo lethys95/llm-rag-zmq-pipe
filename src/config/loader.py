@@ -11,6 +11,7 @@ from .settings import (
     QdrantConfig,
     ConversationStoreConfig,
     MemoryDecayConfig,
+    DetoxConfig,
 )
 
 
@@ -112,6 +113,12 @@ def _create_settings_from_flat_config(config: dict[str, any]) -> Settings:
         max_documents=config["max_context_documents"],
     )
     
+    detox = DetoxConfig(
+        idle_trigger_minutes=config["detox_idle_trigger_minutes"],
+        min_interval_minutes=config["detox_min_interval_minutes"],
+        max_duration_minutes=config["detox_max_duration_minutes"],
+    )
+    
     return Settings(
         input_endpoint=config["input_endpoint"],
         output_endpoint=config["output_endpoint"],
@@ -130,6 +137,7 @@ def _create_settings_from_flat_config(config: dict[str, any]) -> Settings:
         qdrant=qdrant,
         conversation_store=conversation_store,
         memory_decay=memory_decay,
+        detox=detox,
         enable_sentiment_analysis=config["enable_sentiment_analysis"],
         enable_context_interpreter=config["enable_context_interpreter"],
         sentiment_max_retries=config["sentiment_max_retries"],

@@ -3,12 +3,13 @@
 import logging
 from textwrap import dedent
 
-from ..llm.base import BaseLLM
-from ..rag.base import BaseRAG
-from ..rag.selector import RAGDocument
-from ..rag.algorithms import MemoryDecayAlgorithm
-from ..storage import ConversationStore
-from .context_interpreter import ContextInterpreterHandler
+from src.llm.base import BaseLLM
+from src.rag.base import BaseRAG
+from src.rag.selector import RAGDocument
+from src.rag.algorithms import MemoryDecayAlgorithm
+from src.storage import ConversationStore
+from src.handlers.context_interpreter import ContextInterpreterHandler
+from src.nodes.orchestration.knowledge_broker import KnowledgeBroker
 
 logger = logging.getLogger(__name__)
 
@@ -17,13 +18,17 @@ class PrimaryResponseHandler:
     """Handler for generating primary responses using a large LLM.
     
     This handler composes a BaseLLM provider and RAG system to generate
-    the main response to user queries. It uses composition over inheritance
+    main response to user queries. It uses composition over inheritance
     to remain flexible and focused on its single responsibility.
     
     Optionally composes a ContextInterpreterHandler to reformulate RAG
     results before feeding them to the primary LLM.
     """
-    
+
+    SYSTEM_PROMPT_WITH_CONTEXT = "You are an AI companion. You're here to provide emotional support, to listen, provide guidance, etc."
+
+    SYSTEM_PROMPT_WITHOUT_CONTEXT = "You are an AI companion. You're here to provide emotional support, to listen, provide guidance, etc."
+
     def __init__(
         self,
         llm_provider: BaseLLM,
@@ -33,7 +38,7 @@ class PrimaryResponseHandler:
         memory_decay: MemoryDecayAlgorithm | None = None,
         max_semantic_documents: int = 10
     ):
-        """Initialize the primary response handler.
+        """Initialize primary response handler.
         
         Args:
             llm_provider: The LLM provider to use for generation (composed, not inherited)
@@ -63,15 +68,19 @@ class PrimaryResponseHandler:
         prompt: str,
         context: str | None = None,
         use_rag: bool = True,
-        system_prompt_override: str | None = None
+        system_prompt_override: str | None = None,
+        analyzed_context: dict | None = None,
+        broker: KnowledgeBroker | None = None
     ) -> str:
-        """Generate a response to the user prompt.
+        """Generate a response to user prompt.
         
         Args:
             prompt: The user's prompt/question
             context: Optional pre-retrieved context (if None and use_rag=True, will retrieve)
             use_rag: Whether to use RAG for context retrieval
-            system_prompt_override: Optional override for the system prompt persona
+            system_prompt_override: Optional override for system prompt persona
+            analyzed_context: Optional dictionary with analyzed data from nodes
+            broker: Optional KnowledgeBroker for full access to node data
             
         Returns:
             Generated response string
@@ -79,10 +88,13 @@ class PrimaryResponseHandler:
         logger.debug(f"Generating primary response for prompt: {prompt[:100]}...")
         
         try:
-            if use_rag and context is None:
+            # Use analyzed context if provided (preferred over raw RAG)
+            if analyzed_context:
+                context = self._format_analyzed_context(analyzed_context)
+            elif use_rag and context is None:
                 context = self._retrieve_context(prompt)
             
-            full_prompt = self._build_prompt(prompt, context, system_prompt_override)
+            full_prompt = self._build_prompt(prompt, context, system_prompt_override, analyzed_context)
             response = self.llm.generate(full_prompt)
 
             print(f"PRIMARY RESPONSE: {response}")
@@ -93,6 +105,74 @@ class PrimaryResponseHandler:
         except Exception as e:
             logger.error(f"Error generating primary response: {e}", exc_info=True)
             raise
+    
+    def _format_analyzed_context(self, analyzed_context: dict) -> str:
+        """Format analyzed context from various nodes into coherent string.
+        
+        Args:
+            analyzed_context: Dictionary with sentiment, memories, trust, etc.
+            
+        Returns:
+            Formatted context string for LLM
+        """
+        parts = []
+        
+        # Add sentiment analysis
+        if "sentiment" in analyzed_context:
+            sentiment = analyzed_context["sentiment"]
+            sentiment_parts = []
+            if sentiment.sentiment:
+                sentiment_parts.append(f"Current Sentiment: {sentiment.sentiment}")
+            if sentiment.emotional_tone:
+                sentiment_parts.append(f"Emotional Tone: {sentiment.emotional_tone}")
+            if sentiment.key_topics:
+                sentiment_parts.append(f"Topics: {', '.join(sentiment.key_topics)}")
+            if sentiment.confidence is not None:
+                sentiment_parts.append(f"Confidence: {sentiment.confidence:.2f}")
+            if sentiment_parts:
+                parts.append("\n".join(sentiment_parts))
+        
+        # Add trust analysis
+        if "trust_analysis" in analyzed_context:
+            trust = analyzed_context["trust_analysis"]
+            if trust.score is not None:
+                parts.append(f"Trust Level: {trust.score:.2f}")
+            if trust.relationship_stage:
+                parts.append(f"Relationship Stage: {trust.relationship_stage}")
+        
+        # Add needs analysis
+        if "needs_analysis" in analyzed_context:
+            needs = analyzed_context["needs_analysis"]
+            if needs.primary_needs:
+                parts.append(f"Primary Needs: {', '.join(needs.primary_needs)}")
+            if needs.unmet_needs:
+                parts.append(f"Unmet Needs: {', '.join(needs.unmet_needs)}")
+            if needs.need_urgency > 0.7:
+                parts.append(f"Urgency: {needs.need_urgency:.2f}")
+            if needs.suggested_approach:
+                parts.append(f"Suggested Approach: {needs.suggested_approach}")
+        
+        # Add evaluated memories
+        if "evaluated_memories" in analyzed_context:
+            memories = analyzed_context["evaluated_memories"]
+            if memories:
+                memory_parts = []
+                for i, (doc, evaluation) in enumerate(memories[:5], 1):
+                    summary = evaluation.get("summary") if evaluation else doc.content
+                    memory_parts.append(f"Memory {i}: {summary}")
+                if memory_parts:
+                    parts.append("Relevant Memories:\n" + "\n".join(memory_parts))
+        
+        # Add idle time
+        if "idle_time_minutes" in analyzed_context:
+            idle = analyzed_context["idle_time_minutes"]
+            if idle > 0:
+                parts.append(f"User Idle Time: {idle:.1f} minutes")
+        
+        if parts:
+            return "\n\n---\n\n".join(parts)
+        
+        return ""
     
     def _retrieve_context(self, prompt: str) -> str:
         """Retrieve relevant context from two-tier memory system.
@@ -222,20 +302,22 @@ class PrimaryResponseHandler:
         self,
         prompt: str,
         context: str | None,
-        system_prompt_override: str | None = None
+        system_prompt_override: str | None = None,
+        analyzed_context: dict | None = None
     ) -> str:
-        """Build the full prompt with optional context and system prompt override.
+        """Build full prompt with optional context and system prompt override.
         
         Args:
             prompt: Original user prompt
             context: Retrieved context from RAG (if any)
-            system_prompt_override: Optional override for the system prompt persona
+            system_prompt_override: Optional override for system prompt persona
+            analyzed_context: Optional dictionary with analyzed data from nodes
             
         Returns:
             Augmented prompt ready for LLM
         """
-        default_with_context = "You are a helpful AI assistant. Use the following context to answer the user's question."
-        default_without_context = "You are a helpful AI assistant. Answer the user's question directly and concisely."
+        default_with_context = self.SYSTEM_PROMPT_WITH_CONTEXT
+        default_without_context = self.SYSTEM_PROMPT_WITHOUT_CONTEXT
         
         if context and context.strip():
             system_prompt = system_prompt_override or default_with_context

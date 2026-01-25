@@ -8,6 +8,14 @@ the rigid sequential pipeline with a dynamic, queue-based system where:
 - Queue Manager handles priority-based execution
 - Registry manages node lifecycle
 
+Directory Structure:
+- core/: Base classes, protocols, and types
+- orchestration/: Central coordination components
+- processing/: Content analysis and response nodes
+- storage_nodes/: Persistence and storage nodes
+- communication_nodes/: Network communication nodes
+- algo_nodes/: Algorithm-specific nodes
+
 Key Components:
 - BaseNode: Abstract base class for all nodes
 - NodeResult: Standard result format from node execution
@@ -17,17 +25,14 @@ Key Components:
 - NodeRegistry: Plugin-style node management
 """
 
-from .result import NodeResult, NodeStatus
-from .base import BaseNode
-from .knowledge_broker import KnowledgeBroker
-from .queue_manager import TaskQueueManager
-from .decision_engine import DecisionEngine
-from .registry import NodeRegistry
+from src.nodes.core import NodeResult, NodeStatus, BaseNode, NodeProtocol
+from src.nodes.orchestration import KnowledgeBroker, TaskQueueManager, DecisionEngine, NodeRegistry
 
 __all__ = [
     "NodeResult",
     "NodeStatus",
     "BaseNode",
+    "NodeProtocol",
     "KnowledgeBroker",
     "TaskQueueManager",
     "DecisionEngine",
