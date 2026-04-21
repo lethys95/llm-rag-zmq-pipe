@@ -13,17 +13,14 @@ logger = logging.getLogger(__name__)
 
 @register_node
 class CheckFeedbackNode(BaseNode):
-    """Node that checks for feedback from downstream pipeline.
+    """Non-blocking check for error feedback from the downstream pipeline."""
 
-    This node performs a non-blocking poll of the DEALER socket to check
-    if the downstream pipeline has sent any error messages or feedback.
-    This is typically used to detect incompatibility issues.
+    def __init__(self, zmq_handler: ZMQHandler) -> None:
+        super().__init__()
+        self._zmq_handler = zmq_handler
 
-    Stored in broker (if feedback received):
-        - 'downstream_feedback': Feedback message from downstream
-    """
-
-    _zmq_handler = ZMQHandler()
+    def get_description(self) -> str:
+        return "Non-blocking poll of the DEALER socket to check if the downstream pipeline has sent error feedback."
 
     async def execute(self, broker: KnowledgeBroker) -> NodeResult:
         """Check for feedback from downstream via DEALER socket.

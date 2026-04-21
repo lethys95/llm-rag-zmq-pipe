@@ -1,10 +1,12 @@
-from src.nodes.core.base_node import BaseNode
-from src.nodes.orchestration.node_options_registry import NodeOptionsRegistry
+from __future__ import annotations
+
+_NODE_CLASSES: set[type] = set()
 
 
-def register_node(cls: type[BaseNode]) -> type[BaseNode]:
-    if not issubclass(cls, BaseNode):
-        raise TypeError(f"{cls.__name__} must inherit from BaseNode")
-    registry = NodeOptionsRegistry.get_instance()
-    registry._registered_nodes[cls.__name__] = cls
+def register_node(cls: type) -> type:
+    _NODE_CLASSES.add(cls)
     return cls
+
+
+def get_registered_classes() -> frozenset[type]:
+    return frozenset(_NODE_CLASSES)

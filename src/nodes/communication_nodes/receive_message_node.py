@@ -18,24 +18,17 @@ logger = logging.getLogger(__name__)
 
 @register_node
 class ReceiveMessageNode(BaseNode):
-    """Node that receives and parses incoming ZMQ messages.
+    """Receives and parses incoming ZMQ messages into the broker."""
 
-    This node polls the ROUTER socket for incoming messages, parses them
-    (supporting both msgpack and JSON formats), extracts DialogueInput,
-    and stores the identity frames and parsed data in the KnowledgeBroker.
-
-    Stored in broker:
-        - 'zmq_identity': Identity frames for routing replies
-        - 'message_content': User's message content
-        - 'message_speaker': Speaker identifier
-        - 'system_prompt_override': Optional system prompt override
-        - 'dialogue_input': Complete DialogueInput object
-    """
-
-    _zmq_handler = ZMQHandler()
     _timeout_ms = 30_000
 
-    # TODO: Broker not used? Why.
+    def __init__(self, zmq_handler: ZMQHandler) -> None:
+        super().__init__()
+        self._zmq_handler = zmq_handler
+
+    def get_description(self) -> str:
+        return "Poll the ROUTER socket for an incoming message and populate the broker with DialogueInput and ZMQ identity."
+
     async def execute(self, broker: KnowledgeBroker) -> NodeResult:
         """Receive and parse a message from the ROUTER socket.
 

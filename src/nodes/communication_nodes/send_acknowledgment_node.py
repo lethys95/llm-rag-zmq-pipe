@@ -13,19 +13,14 @@ logger = logging.getLogger(__name__)
 
 @register_node
 class SendAcknowledgmentNode(BaseNode):
-    """Node that sends acknowledgment messages back to requesters.
+    """Sends an acknowledgment back to the requester via the ROUTER socket."""
 
-    This node reads the identity frames and acknowledgment data from the
-    KnowledgeBroker and sends a formatted ACK message back to the original
-    requester via the ROUTER socket.
+    def __init__(self, zmq_handler: ZMQHandler) -> None:
+        super().__init__()
+        self._zmq_handler = zmq_handler
 
-    Expected in broker:
-        - zmq_identity: Identity frames for routing
-        - ack_status: Status string ("success" or "error")
-        - ack_message: Acknowledgment message content
-    """
-
-    _zmq_handler = ZMQHandler()
+    def get_description(self) -> str:
+        return "Send an ACK message back to the original requester via the ROUTER socket."
 
     async def execute(self, broker: KnowledgeBroker) -> NodeResult:
         """Send acknowledgment message via ROUTER socket.

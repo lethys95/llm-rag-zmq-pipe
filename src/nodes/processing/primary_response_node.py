@@ -11,9 +11,12 @@ from src.nodes.core.result import NodeResult, NodeStatus
 class PrimaryResponseNode(BaseNode):
     """Node that generates primary response using provided handler."""
 
-    def __init__(self, handler: PrimaryResponseHandler, **kwargs):
-        super().__init__(name="primary_response", **kwargs)
-        self.handler = handler
+    def __init__(self, primary_response_handler: PrimaryResponseHandler) -> None:
+        super().__init__()
+        self.handler = primary_response_handler
+
+    def get_description(self) -> str:
+        return "Generate the primary response using the LLM, reading all available context from the broker."
 
     async def execute(self, broker: KnowledgeBroker) -> NodeResult:
         dialogue_input = broker.dialogue_input

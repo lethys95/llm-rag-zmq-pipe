@@ -1,17 +1,10 @@
 from src.llm.base import FunctionDefinition, FunctionParameters, ToolDefinition
-from src.nodes.orchestration.node_options_registry import NodeOptionsRegistry
-
 
 NO_ACTIONS_NEEDED_NODE_RESPONSE: str = "complete"
 
-def build_select_nodes_tool(registry: NodeOptionsRegistry) -> ToolDefinition:
-    """Build tools schema for function calling.
-    Args:
-        available_nodes: Set of registered node names
-    Returns:
-        Tool definition following OpenAI format
-    """
-    node_names = registry.get_option_names()
+
+def build_select_nodes_tool(registry: "NodeRegistry") -> ToolDefinition:  # noqa: F821
+    node_names = registry.get_names()
     node_names.add(NO_ACTIONS_NEEDED_NODE_RESPONSE)
 
     return ToolDefinition(

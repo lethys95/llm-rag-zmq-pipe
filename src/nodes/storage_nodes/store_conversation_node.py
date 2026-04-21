@@ -32,20 +32,16 @@ class StoreConversationNode(BaseNode):
     def __init__(
         self,
         conversation_store: ConversationStore,
-        rag_provider: BaseRAG,
+        rag: BaseRAG,
         embedding_service: EmbeddingService,
-        **kwargs,
-    ):
-        super().__init__(
-            name="store_conversation",
-            priority=10,
-            queue_type="background",
-            dependencies=["primary_response"],
-            **kwargs,
-        )
+    ) -> None:
+        super().__init__()
         self.conversation_store = conversation_store
-        self.rag_provider = rag_provider
+        self.rag_provider = rag
         self.embedding_service = embedding_service
+
+    def get_description(self) -> str:
+        return "Persist the conversation turn (user message + response) to SQLite and Qdrant. Run after response is sent."
 
     async def execute(self, broker: KnowledgeBroker) -> NodeResult:
         try:

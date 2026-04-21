@@ -13,17 +13,14 @@ logger = logging.getLogger(__name__)
 
 @register_node
 class ForwardResponseNode(BaseNode):
-    """Node that forwards the final response to downstream pipeline.
+    """Forwards the final response to the downstream pipeline via the DEALER socket."""
 
-    This node reads the final response from the KnowledgeBroker and
-    sends it via the DEALER socket to the downstream pipeline. It also
-    prints the response to stdout.
+    def __init__(self, zmq_handler: ZMQHandler) -> None:
+        super().__init__()
+        self._zmq_handler = zmq_handler
 
-    Expected in broker:
-        - primary_response: The final response text to forward
-    """
-
-    _zmq_handler = ZMQHandler()
+    def get_description(self) -> str:
+        return "Send the primary response to the downstream pipeline (TTS) via the DEALER socket."
 
     async def execute(self, broker: KnowledgeBroker) -> NodeResult:
         """Forward response via DEALER socket.

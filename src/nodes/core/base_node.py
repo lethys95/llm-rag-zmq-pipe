@@ -24,22 +24,10 @@ class BaseNode(ABC):
         timeout: Optional timeout in seconds for node execution
     """
 
-    def __init__(self, name: str | None, timeout: float | None = None):
-        """Initialize the base node.
-
-        Args:
-            name: Unique identifier for this node
-            priority: Execution priority (0 = highest, default: 5)
-            dependencies: List of node names that must complete first
-            queue_type: "immediate" or "background" (default: "immediate")
-            timeout: Optional timeout in seconds (default: None)
-        """
-        self.name = name
+    def __init__(self, name: str | None = None, timeout: float | None = None):
+        self.name = name or self._make_simple_name()
         self.timeout = timeout
-        if not name:
-            name = self._make_simple_name()
-
-        logger.debug(f"Node '{self.name}' initialized: ")
+        logger.debug(f"Node '{self.name}' initialized")
 
     @abstractmethod
     async def execute(self, broker: KnowledgeBroker) -> NodeResult:
@@ -71,7 +59,7 @@ class BaseNode(ABC):
         Returns:
             True if node should execute, False to skip
         """
-        ...
+        return True
 
     def _make_simple_name(self) -> str:
         """
@@ -80,8 +68,8 @@ class BaseNode(ABC):
         some_name = self.__class__.__name__.replace("Node", "")
         return re.sub(r"(?<!^)(?=[A-Z])", "_", some_name).lower()
 
-    @abstractmethod
-    def get_description(self) -> str: ...
+    def get_description(self) -> str:
+        return self.name
 
     # def validate_dependencies(self, completed_nodes: set[str]) -> bool:
     #     """Check if all dependencies have been completed.
