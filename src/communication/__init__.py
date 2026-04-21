@@ -1,5 +1,5 @@
 """Communication layer for ZMQ message handling."""
 
-from .zmq_connection_manager import ZMQConnectionManager
+from .zmq_handler import ZMQHandler
 
-__all__ = ["ZMQConnectionManager"]
+__all__ = ["ZMQHandler"]

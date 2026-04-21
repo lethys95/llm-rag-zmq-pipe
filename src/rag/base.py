@@ -25,7 +25,6 @@ class BaseRAG(ABC):
         Raises:
             Exception: If retrieval fails
         """
-        pass
 
     @abstractmethod
     def retrieve_documents(self, query: str, top_k: int = 5) -> list["RAGDocument"]:
@@ -44,7 +43,6 @@ class BaseRAG(ABC):
         Raises:
             Exception: If retrieval fails
         """
-        pass
 
     @abstractmethod
     def store(
@@ -52,34 +50,31 @@ class BaseRAG(ABC):
         text: str,
         embedding: list[float],
         metadata: dict[str, object] | None = None,
-        point_id: str | None = None
+        point_id: str | None = None,
     ) -> str:
         """Store a document with its embedding.
-        
+
         Args:
             text: The text content to store
             embedding: The embedding vector for the text
             metadata: Optional metadata to store with the document
             point_id: Optional specific ID for the point (auto-generated if None)
-            
+
         Returns:
             The ID of the stored point
         """
-        pass
-    
+
     @abstractmethod
     def update_access_count(self, point_id: str) -> None:
         """Increment access count for a document.
-        
+
         Args:
             point_id: The point ID to update
         """
-        pass
-    
+
     @abstractmethod
     def close(self) -> None:
         """Clean up resources and close connections.
-        
+
         This method should be called when the RAG provider is no longer needed.
         """
-        pass

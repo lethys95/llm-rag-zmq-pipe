@@ -8,7 +8,7 @@ This module contains the fundamental building blocks for the node system:
 """
 
 from src.nodes.core.result import NodeResult, NodeStatus
-from src.nodes.core.base import BaseNode
+from src.nodes.core.base_node import BaseNode
 from src.nodes.core.node_protocol import NodeProtocol
 
 __all__ = [

@@ -17,15 +17,16 @@ logger = logging.getLogger(__name__)
 
 class SentimentAnalysisHandler:
     """Handler for sentiment analysis using a small LLM.
-    
+
     This handler composes a BaseLLM provider and RAG system to perform
     sentiment analysis on user messages. It uses composition over inheritance
     to remain flexible and focused on its single responsibility.
-    
+
     Includes retry logic to handle unpredictable AI model behavior.
     """
-    
-    SYSTEM_PROMPT = dedent("""
+
+    SYSTEM_PROMPT = dedent(
+        """
         You are a sentiment analysis assistant. Your ONLY job is to analyze the sentiment of user messages and return a JSON response.
 
         You must ALWAYS respond with valid JSON in the following format:
@@ -55,7 +56,8 @@ class SentimentAnalysisHandler:
           This should capture WHO, WHAT specifically, not just generic topics
         - key_topics: Optional. List of main topics or themes in the message (for querying/indexing)
 
-        IMPORTANT: Respond ONLY with valid JSON. No explanations, no additional text. No nothing. Anything else than JSON in that SPECIFIC format means that you have failed your task.""")
+        IMPORTANT: Respond ONLY with valid JSON. No explanations, no additional text. No nothing. Anything else than JSON in that SPECIFIC format means that you have failed your task."""
+    )
 
     def __init__(
         self,
@@ -63,10 +65,10 @@ class SentimentAnalysisHandler:
         rag_provider: BaseRAG,
         max_retries: int = 3,
         retry_delay: float = 0.5,
-        embedding_service: EmbeddingService | None = None
+        embedding_service: EmbeddingService | None = None,
     ):
         """Initialize the sentiment analysis handler.
-        
+
         Args:
             llm_provider: The LLM provider to use for analysis (composed, not inherited)
             rag_provider: The RAG provider for storing/retrieving sentiment data
@@ -79,128 +81,144 @@ class SentimentAnalysisHandler:
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self.embedding_service = embedding_service or EmbeddingService.get_instance()
-        
-        logger.info(dedent(f"""
-            Sentiment analysis handler initialized
-            (max_retries={max_retries}, retry_delay={retry_delay}s)"""))
-    
+
+        logger.info(
+            "Sentiment analysis handler initialized (max_retries=%s, retry_delay=%ss)",
+            max_retries,
+            retry_delay,
+        )
+
     def analyze(self, message: str, speaker: str) -> SentimentAnalysis | None:
         """Analyze the sentiment of a message with retry logic.
-        
+
         Retries on failures to handle unpredictable AI model behavior.
         Each failure is logged for debugging.
-        
+
         Args:
             message: The user message to analyze
             speaker: Identifier for who is speaking (memory owner)
-            
+
         Returns:
             SentimentAnalysis object if successful, None if all attempts fail
         """
-        logger.debug(f"Analyzing sentiment for '{speaker}' message: {message[:100]}...")
-        
+        logger.debug("Analyzing sentiment for '%s' message: %s...", speaker, message[:100])
+
         last_error = None
-        
+
         for attempt in range(1, self.max_retries + 1):
             sentiment = self._attempt_analysis(message, speaker, attempt)
-            
+
             if sentiment:
                 self._log_success(sentiment, attempt)
                 self._store_in_rag(message, sentiment)
                 return sentiment
             else:
                 last_error = self._handle_failure(attempt, message)
-        
+
         # All attempts failed
         self._log_final_failure(last_error)
         return None
-    
+
     def _attempt_analysis(
-        self,
-        message: str,
-        speaker: str,
-        attempt: int
+        self, message: str, speaker: str, attempt: int
     ) -> SentimentAnalysis | None:
         """Attempt a single sentiment analysis.
-        
+
         Args:
             message: The user message to analyze
             speaker: Identifier for who is speaking
             attempt: Current attempt number
-            
+
         Returns:
             SentimentAnalysis object if successful, None otherwise
         """
         try:
-            logger.debug(f"Sentiment analysis attempt {attempt}/{self.max_retries}")
+            logger.debug("Sentiment analysis attempt %s/%s", attempt, self.max_retries)
             response = self.llm.generate(self._build_prompt(message))
-            
+
             return self._parse_response(response, speaker)
-            
+
         except json.JSONDecodeError as e:
-            logger.error(dedent(f"""
-                Attempt {attempt}/{self.max_retries}: JSON parsing error: {e}
-                Raw response causing error: {response}"""))
-            return None
-            
-        except Exception as e:
             logger.error(
-                f"Attempt {attempt}/{self.max_retries}: Unexpected error: {e}",
-                exc_info=True
+                "Attempt %s/%s: JSON parsing error: %s. Raw response causing error: %s",
+                attempt,
+                self.max_retries,
+                e,
+                response,
             )
             return None
-    
+
+        except Exception as e:
+            logger.error(
+                "Attempt %s/%s: Unexpected error: %s",
+                attempt,
+                self.max_retries,
+                e,
+                exc_info=True,
+            )
+            return None
+
     def _handle_failure(self, attempt: int, message: str) -> str:
         """Handle a failed analysis attempt.
-        
+
         Args:
             attempt: Current attempt number
             message: The message that was being analyzed
-            
+
         Returns:
             Error message describing the failure
         """
-        error_msg = f"Sentiment analysis validation failed for message: {message[:50]}..."
-        logger.warning(f"Attempt {attempt}/{self.max_retries}: {error_msg}")
-        
+        error_msg = (
+            "Sentiment analysis validation failed for message: %s..." % message[:50]
+        )
+        logger.warning("Attempt %s/%s: %s", attempt, self.max_retries, error_msg)
+
         if attempt < self.max_retries:
-            logger.debug(f"Retrying in {self.retry_delay}s...")
+            logger.debug("Retrying in %ss...", self.retry_delay)
             time.sleep(self.retry_delay)
-        
+
         return error_msg
-    
+
     def _log_success(self, sentiment: SentimentAnalysis, attempt: int) -> None:
         """Log a successful sentiment analysis.
-        
+
         Args:
             sentiment: The successful sentiment analysis result
             attempt: The attempt number that succeeded
         """
         if attempt > 1:
-            logger.info(dedent(f"""
-                Sentiment analysis successful on attempt {attempt}/{self.max_retries}:
-                {sentiment.sentiment} (confidence: {sentiment.confidence})"""))
+            logger.info(
+                "Sentiment analysis successful on attempt %s/%s: %s (confidence: %s)",
+                attempt,
+                self.max_retries,
+                sentiment.sentiment,
+                sentiment.confidence,
+            )
         else:
-            logger.info(dedent(f"""
-                Sentiment analysis successful: {sentiment.sentiment}
-                (confidence: {sentiment.confidence})"""))
-    
+            logger.info(
+                "Sentiment analysis successful: %s (confidence: %s)",
+                sentiment.sentiment,
+                sentiment.confidence,
+            )
+
     def _log_final_failure(self, last_error: str | None) -> None:
         """Log final failure after all retry attempts exhausted.
-        
+
         Args:
             last_error: The last error message encountered
         """
-        logger.error(dedent(f"""
-            Sentiment analysis failed after {self.max_retries} attempts.
-            Last error: {last_error}"""))
-    
+        logger.error(
+            "Sentiment analysis failed after %s attempts. Last error: %s",
+            self.max_retries,
+            last_error,
+        )
+
     def _build_prompt(self, message: str) -> str:
         """Build the full prompt for sentiment analysis.
-        
+
         Args:
             message: The user message to analyze
-            
+
         Returns:
             Full prompt with system instructions and user message
         """
@@ -211,70 +229,72 @@ class SentimentAnalysisHandler:
             {message}
 
             JSON response:""")
-    
+
     def _parse_response(self, response: str, speaker: str) -> SentimentAnalysis | None:
         """Parse LLM response into SentimentAnalysis object.
-        
+
         Args:
             response: Raw response from LLM
             speaker: The memory owner to add to the sentiment analysis
-            
+
         Returns:
             SentimentAnalysis object if parsing successful, None otherwise
         """
         try:
             json_str = self._extract_json(response)
             data = json.loads(json_str)
-            data['memory_owner'] = speaker
+            data["memory_owner"] = speaker
             sentiment = SentimentAnalysis(**data)
-            
-            logger.debug(f"Successfully parsed sentiment: {sentiment.model_dump()}")
+
+            logger.debug("Successfully parsed sentiment: %s", sentiment.model_dump())
             return sentiment
-            
+
         except json.JSONDecodeError as e:
-            logger.error(dedent(f"""
-                Failed to parse JSON response: {e}
-                Raw response: {response}"""))
+            logger.error(
+                "Failed to parse JSON response: %s. Raw response: %s",
+                e,
+                response,
+            )
             return None
-            
+
         except ValidationError as e:
-            logger.error(f"Invalid sentiment data structure: {e}")
+            logger.error("Invalid sentiment data structure: %s", e)
             return None
-            
+
         except (TypeError, KeyError) as e:
-            logger.error(f"Invalid sentiment data: {e}")
+            logger.error("Invalid sentiment data: %s", e)
             return None
-    
+
     def _extract_json(self, text: str) -> str:
         """Extract JSON from text that might contain other content.
-        
+
         Args:
             text: Text that might contain JSON
-            
+
         Returns:
             Extracted JSON string
-            
+
         Raises:
             json.JSONDecodeError: If no valid JSON found
         """
         text = text.strip()
-        
-        start = text.find('{')
-        end = text.rfind('}')
-        
+
+        start = text.find("{")
+        end = text.rfind("}")
+
         if start != -1 and end != -1:
-            json_str = text[start:end + 1]
+            json_str = text[start : end + 1]
             json.loads(json_str)
             return json_str
-        
+
         return text
-    
+
     def _store_in_rag(self, message: str, sentiment: SentimentAnalysis) -> None:
         """Store sentiment analysis results in RAG system.
-        
+
         Stores the message with its sentiment metadata for future retrieval.
         Uses the RAG provider's store method with embeddings.
-        
+
         Args:
             message: Original user message
             sentiment: Analyzed sentiment data
@@ -292,15 +312,17 @@ class SentimentAnalysisHandler:
                     "relevance": sentiment.relevance,
                     "chrono_relevance": sentiment.chrono_relevance,
                     "context_summary": sentiment.context_summary,
-                    "key_topics": sentiment.key_topics or []
-                }
+                    "key_topics": sentiment.key_topics or [],
+                },
             )
-            
-            logger.debug(dedent(f"""
-                Stored sentiment in RAG system:
-                Point ID: {point_id}
-                Message: {message[:50]}...
-                Sentiment: {sentiment.sentiment} ({sentiment.confidence})"""))
-            
+
+            logger.debug(
+                "Stored sentiment in RAG system: Point ID: %s, Message: %s..., Sentiment: %s (%s)",
+                point_id,
+                message[:50],
+                sentiment.sentiment,
+                sentiment.confidence,
+            )
+
         except Exception as e:
-            logger.error(f"Error storing sentiment in RAG: {e}", exc_info=True)
+            logger.error("Error storing sentiment in RAG: %s", e, exc_info=True)

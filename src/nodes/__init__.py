@@ -26,7 +26,12 @@ Key Components:
 """
 
 from src.nodes.core import NodeResult, NodeStatus, BaseNode, NodeProtocol
-from src.nodes.orchestration import KnowledgeBroker, TaskQueueManager, DecisionEngine, NodeRegistry
+from src.nodes.orchestration import (
+    KnowledgeBroker,
+    TaskQueueManager,
+    DecisionEngine,
+    NodeRegistry,
+)
 
 __all__ = [
     "NodeResult",

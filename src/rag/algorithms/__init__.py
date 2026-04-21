@@ -11,7 +11,7 @@ from .nudging_algorithm import (
     NudgeResult,
     ExternalSource,
     CompanionPersonality,
-    NudgingWeights
+    NudgingWeights,
 )
 
 __all__ = [
@@ -23,5 +23,5 @@ __all__ = [
     "NudgeResult",
     "ExternalSource",
     "CompanionPersonality",
-    "NudgingWeights"
+    "NudgingWeights",
 ]

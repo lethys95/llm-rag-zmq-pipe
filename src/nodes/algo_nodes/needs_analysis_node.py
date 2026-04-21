@@ -1,101 +1,67 @@
 """Needs analysis node using Maslow's hierarchy."""
 
+import json
 import logging
-from dataclasses import dataclass
+from textwrap import dedent
 
-from src.nodes.core.base import BaseNode
+from src.nodes.core.base_node import BaseNode
+from src.nodes.orchestration.node_registry_decorator import register_node
 from src.nodes.core.result import NodeResult, NodeStatus
 from src.nodes.orchestration.knowledge_broker import KnowledgeBroker
-from src.llm.base import BaseLLM
+from src.models.analysis import NeedsAnalysis
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class NeedsAnalysis:
-    """Analysis of user's psychological needs using Maslow's hierarchy.
-    
-    Memory Owner: user
-    """
-    
-    memory_owner: str
-    
-    # Maslow's hierarchy scores (0.0-1.0)
-    physiological: float
-    safety: float
-    belonging: float
-    esteem: float
-    autonomy: float
-    meaning: float
-    growth: float
-    
-    # Derived fields
-    primary_needs: list[str]
-    unmet_needs: list[str]
-    need_urgency: float
-    need_persistence: float
-    context_summary: str
-    suggested_approach: str
-
-
+@register_node
 class NeedsAnalysisNode(BaseNode):
     """Node that analyzes user's psychological needs using Maslow's hierarchy.
-    
+
     This node uses LLM analysis to identify unmet psychological needs
     based on conversation context, sentiment, and retrieved memories.
     """
 
-    SYSTEM_PROMPT = """
-You are a needs analysis assistant. Your job is to analyze user's conversation
-and identify their psychological needs based on Maslow's hierarchy of needs.
+    SYSTEM_PROMPT = dedent("""
+        You are a needs analysis assistant. Your job is to analyze user's conversation
+        and identify their psychological needs based on Maslow's hierarchy of needs.
 
-Maslow's Hierarchy:
-1. Physiological Needs: Basic survival needs (food, water, sleep, health)
-2. Safety Needs: Security, stability, freedom from fear
-3. Belonging Needs: Love, friendship, intimacy, family, sense of connection
-4. Esteem Needs: Respect, self-esteem, status, recognition, freedom
-5. Autonomy Needs: Control over one's life, choices, independence
-6. Meaning Needs: Purpose, morality, creativity, spirituality, self-actualization
-7. Growth Needs: Learning, self-improvement, personal development
+        Maslow's Hierarchy:
+        1. Physiological Needs: Basic survival needs (food, water, sleep, health)
+        2. Safety Needs: Security, stability, freedom from fear
+        3. Belonging Needs: Love, friendship, intimacy, family, sense of connection
+        4. Esteem Needs: Respect, self-esteem, status, recognition, freedom
+        5. Autonomy Needs: Control over one's life, choices, independence
+        6. Meaning Needs: Purpose, morality, creativity, spirituality, self-actualization
+        7. Growth Needs: Learning, self-improvement, personal development
 
-For each need level, provide:
-- A score from 0.0 (not relevant) to 1.0 (very important)
-- Brief reasoning for your score
+        For each need level, provide:
+        - A score from 0.0 (not relevant) to 1.0 (very important)
+        - Brief reasoning for your score
 
-Then provide:
-1. Primary Needs: Top 2-3 need levels (most urgent)
-2. Unmet Needs: Need levels with score < 0.5
-3. Need Urgency: Overall urgency (0.0 = not urgent, 1.0 = crisis)
-4. Need Persistence: How long will this need persist (0.0 = fleeting, 1.0 = long-term)
-5. Context Summary: Brief explanation of user's situation
-6. Suggested Approach: How to address these needs (e.g., "reflective_listening", "socratic_questioning", "practical_problem_solving")
+        Then provide:
+        1. Primary Needs: Top 2-3 need levels (most urgent)
+        2. Unmet Needs: Need levels with score < 0.5
+        3. Need Urgency: Overall urgency (0.0 = not urgent, 1.0 = crisis)
+        4. Need Persistence: How long will this need persist (0.0 = fleeting, 1.0 = long-term)
+        5. Context Summary: Brief explanation of user's situation
+        6. Suggested Approach: How to address these needs (e.g., "reflective_listening", "socratic_questioning", "practical_problem_solving")
 
-Respond in JSON format:
-{
-    "physiological": 0.0-1.0,
-    "safety": 0.0-1.0,
-    "belonging": 0.0-1.0,
-    "esteem": 0.0-1.0,
-    "autonomy": 0.0-1.0,
-    "meaning": 0.0-1.0,
-    "growth": 0.0-1.0,
-    "primary_needs": ["belonging", "meaning"],
-    "unmet_needs": ["belonging"],
-    "need_urgency": 0.0-1.0,
-    "need_persistence": 0.0-1.0,
-    "context_summary": "Brief explanation",
-    "suggested_approach": "reflective_listening"
-}
-"""
-
-    def __init__(self, llm_provider: BaseLLM, **kwargs):
-        super().__init__(
-            name="needs_analysis",
-            priority=4,
-            queue_type="immediate",
-            **kwargs
-        )
-        self.llm = llm_provider
+        Respond in JSON format:
+        {
+            "physiological": 0.0-1.0,
+            "safety": 0.0-1.0,
+            "belonging": 0.0-1.0,
+            "esteem": 0.0-1.0,
+            "autonomy": 0.0-1.0,
+            "meaning": 0.0-1.0,
+            "growth": 0.0-1.0,
+            "primary_needs": ["belonging", "meaning"],
+            "unmet_needs": ["belonging"],
+            "need_urgency": 0.0-1.0,
+            "need_persistence": 0.0-1.0,
+            "context_summary": "Brief explanation",
+            "suggested_approach": "reflective_listening"
+        }""")
 
     async def execute(self, broker: KnowledgeBroker) -> NodeResult:
         """Analyze user needs from context.
@@ -123,29 +89,20 @@ Respond in JSON format:
             needs = self._parse_needs_response(response)
 
             # Store in broker
-            broker.set_knowledge("needs_analysis", needs)
+            broker.needs_analysis = needs
 
             logger.info(
                 f"Needs analysis completed. Primary needs: {needs.primary_needs}, "
                 f"urgency: {needs.need_urgency:.2f}"
             )
 
-            return NodeResult(
-                status=NodeStatus.SUCCESS,
-                data={"needs": needs}
-            )
+            return NodeResult(status=NodeStatus.SUCCESS, data={"needs": needs})
 
         except Exception as e:
             logger.error(f"Needs analysis failed: {e}", exc_info=True)
             return NodeResult(status=NodeStatus.FAILED, error=str(e))
 
-    def _build_analysis_prompt(
-        self,
-        dialogue_input,
-        sentiment,
-        memories,
-        trust
-    ) -> str:
+    def _build_analysis_prompt(self, dialogue_input, sentiment, memories, trust) -> str:
         """Build prompt for needs analysis.
 
         Args:
@@ -160,13 +117,9 @@ Respond in JSON format:
         parts = [f"User Message: {dialogue_input.content}"]
 
         if sentiment:
-            parts.append(
-                f"Current Sentiment: {sentiment.sentiment}"
-            )
+            parts.append(f"Current Sentiment: {sentiment.sentiment}")
             if sentiment.emotional_tone:
-                parts.append(
-                    f"Emotional Tone: {sentiment.emotional_tone}"
-                )
+                parts.append(f"Emotional Tone: {sentiment.emotional_tone}")
             if sentiment.key_topics:
                 topics = ", ".join(sentiment.key_topics)
                 parts.append(f"Topics: {topics}")
@@ -197,8 +150,6 @@ Respond in JSON format:
             Parsed NeedsAnalysis object
         """
         try:
-            import json
-
             # Extract JSON from response
             start = response.find("{")
             end = response.rfind("}") + 1
@@ -222,7 +173,7 @@ Respond in JSON format:
                     need_urgency=data.get("need_urgency", 0.0),
                     need_persistence=data.get("need_persistence", 0.0),
                     context_summary=data.get("context_summary", ""),
-                    suggested_approach=data.get("suggested_approach", "")
+                    suggested_approach=data.get("suggested_approach", ""),
                 )
 
             logger.warning("Could not parse JSON from needs analysis response")
@@ -253,5 +204,5 @@ Respond in JSON format:
             need_urgency=0.0,
             need_persistence=0.0,
             context_summary="",
-            suggested_approach=""
+            suggested_approach="",
         )

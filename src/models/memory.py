@@ -3,11 +3,12 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 
+#  This entire file needs to be severely re-evaluated.
 
 @dataclass
 class MemoryMetadata:
     """Metadata for a stored memory."""
-    
+
     timestamp: datetime
     memory_owner: str
     sentiment: str
@@ -16,20 +17,20 @@ class MemoryMetadata:
     relevance: float = 0.5
     chrono_relevance: float = 0.5
     context_summary: str | None = None
-    key_topics: list[str] = field(default_factory=list)
+    key_topics: list[str] = field(default_factory=list[str])
     access_count: int = 0
     last_accessed: datetime | None = None
     memory_score: float = 0.0
     is_consolidated: bool = False
-    consolidated_with: list[str] = field(default_factory=list)
+    consolidated_with: list[str] = field(default_factory=list[str])
 
 
 @dataclass
 class ConversationState:
     """Current conversation state for memory evaluation."""
-    
+
     message_count: int = 0
-    recent_topics: list[str] = field(default_factory=list)
+    recent_topics: list[str] = field(default_factory=list[str])
     emotional_tone: str | None = None
     trust_score: float = 0.0
 
@@ -37,7 +38,7 @@ class ConversationState:
 @dataclass
 class TrustAnalysis:
     """Result of trust analysis."""
-    
+
     score: float
     relationship_age_days: int
     interaction_count: int
@@ -50,7 +51,7 @@ class TrustAnalysis:
 @dataclass
 class TrustRecord:
     """Record of trust-related interaction."""
-    
+
     timestamp: datetime
     user_id: str
     interaction_type: str

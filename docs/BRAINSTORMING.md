@@ -42,10 +42,15 @@ Knowing when to stop: Sometimes, the best thing you can do, is to move away and 
 -----------------------------------
 Inject science into this. Psychology and psychiatry are entire fields. We can very much use those resources as we figure out what the correct approach is to any given subject. All under the "guise" of friendship. It's like feeding medicine through food without the user knowing it (they are knowing it to some extent, but it is not blatantly obvious from how interaction is being made. It should be hard to spot in practice, but it's part of the brochure of the program itself)
 -----------------------------------
-Anthropomorphization is a feature not a bug. How can we use it in a way which is healthy?
+Anthropomorphism is a feature not a bug. How can we use it in a way which is healthy?
 -----------------------------------
-Character consitency - Would the AI companion say this? Does it fall outside of what would be natural for the companion to say?
+Character consistency - Would the AI companion say this? Does it fall outside of what would be natural for the companion to say?
 -----------------------------------
 Boundaries - The AI itself must have boundaries to seem realistic, but also to have the user remember that people also have boundaries. That doesn't mean that things can't get personal and heated, but the companion must've given... Well, given consent.
 ------------------------------------
 Scheduler - Time based events which starts conversations on phone and the like. Useful to motivate yourself into doing various tasks.
+---- 
+Less is more
+----
+Contract:
+"Agreeing to this, means that you understand, that you're effectively roleplaying. It's ultimately not real. While its main purpose is to act as a substitute, it's more of a crutch, and can't meaningfully replace real human contact. It's there for you if nothing else is, but once you find something real, you should hold on to that instead of Sanctuary until the day you might eventually need it again"

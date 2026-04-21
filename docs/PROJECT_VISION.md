@@ -42,31 +42,37 @@ Meanwhile, the system operates on:
 5. **Evidence-Based**: Grounded in psychology research, not chatbot tricks
 6. **Human-Centered**: Every design decision asks "does this feel like a person?"
 
-## The Unified Pipeline Architecture
+## The Node-Based Orchestration Architecture
 
-### Overview: Sequential Psychological Analysis
+### Overview: Flexible, Dynamic Node Selection
 
-Each stage feeds into the next, building a comprehensive understanding of the user's state and needs:
+The system uses a **Decision Engine** to dynamically select and orchestrate processing nodes based on incoming message context, user state, and system knowledge. Rather than following a fixed pipeline, nodes are chosen intelligently to address the specific needs of each interaction.
+
+**Key Principle**: The Decision Engine analyzes context and selects the appropriate combination of nodes to execute, allowing for flexible, context-aware processing.
+
+### Common Node Execution Patterns (Not Fixed):
 
 ```
 User Message
     ↓
-Sentiment & Emotion Analysis
+Decision Engine (analyzes context, selects nodes)
     ↓
-Memory Retrieval (time-aware)
+[Dynamically Selected Nodes - Examples:]
+    - Sentiment Analysis (when emotional context needed)
+    - Memory Retrieval (when history is relevant)
+    - Needs Analysis (when psychological needs assessment is beneficial)
+    - Trust Analysis (when relationship dynamics matter)
+    - Detox Evaluation (when intervention timing is being considered)
+    - Strategy Selection (when therapeutic approach needs determination)
+    - Context Interpretation (when retrieved memories need reformulation)
+    - Primary Response Generation (nearly always)
     ↓
-Needs Analysis (psychology-based)
-    ↓
-Strategy Selection (evidence-based + session-aware)
-    ↓
-Context Interpretation (strategy-aware reformulation)
-    ↓
-Response Generation (friend-like, authentic)
-    ↓
-Storage & Learning
+Storage & Learning (metadata capture for future decisions)
 ```
 
-### Stage 1: Sentiment & Emotional State Analysis
+### Example Node: Sentiment & Emotional State Analysis
+
+**When Selected**: Decision engine determines emotional context is relevant for this message
 
 **Purpose**: Understand immediate emotional context and long-term relevance
 
@@ -93,7 +99,9 @@ Output: {
 
 **Storage**: Immediately stored in Qdrant with embeddings + metadata
 
-### Stage 2: Memory Retrieval (memory_chrono_decay)
+### Example Node: Memory Retrieval (memory_chrono_decay)
+
+**When Selected**: Decision engine determines past context would inform current interaction
 
 **Purpose**: Surface contextually relevant past conversations with time-aware scoring
 
@@ -117,7 +125,9 @@ Retrieved:
 
 **Why This Matters**: Provides context for understanding current needs
 
-### Stage 3: Needs Analysis (NEW - Core Innovation)
+### Example Node: Needs Analysis
+
+**When Selected**: Decision engine identifies potential unmet psychological needs
 
 **Purpose**: Identify unmet psychological needs using evidence-based frameworks
 
@@ -168,10 +178,12 @@ Needs Analysis:
 - Meaning: 0.6 (lack of direction suggests purpose-seeking)
 - Urgency: 0.5 (ongoing, not crisis)
 
-Interpretation: User experiencing grief-related loneliness and loss of purpose
+Decision: Select strategy_selection node to determine therapeutic approach
 ```
 
-### Stage 4: Response Strategy Selection
+### Example Node: Response Strategy Selection
+
+**When Selected**: After needs analysis, or when therapeutic approach needs determination
 
 **Purpose**: Choose evidence-based therapeutic approach with temporal consistency
 
@@ -228,7 +240,9 @@ Msg 1: "Presentation went great!" → Strategy: FRESH analysis → Celebratory +
 }
 ```
 
-### Stage 5: Context Interpretation
+### Example Node: Context Interpretation
+
+**When Selected**: When retrieved memories need to be reformulated for the LLM
 
 **Purpose**: Reformulate retrieved memories to emphasize strategy-relevant information
 
@@ -251,7 +265,9 @@ Reformulated: "Their mother passed away recently, and they've been struggling
 with feeling alone since then. They mentioned wanting to feel connected to others."
 ```
 
-### Stage 6: Response Generation (Primary LLM)
+### Example Node: Response Generation (Primary LLM)
+
+**When Selected**: Nearly always (core response generation)
 
 **Purpose**: Generate authentic, friend-like response using all prior context
 
@@ -282,7 +298,9 @@ been for you lately? I remember you used to paint with your mom."
 - ✅ Uses evidence-based approach (reflective listening)
 - ✅ Genuine, not sycophantic (authentic curiosity, not empty validation)
 
-### Stage 7: Storage & Learning
+### Storage & Learning (Post-Processing)
+
+**When Executed**: After response generation, always
 
 **Storage Systems**:
 1. **SQLite (conversation_store)**: Recent conversation history, session metadata
@@ -311,7 +329,8 @@ been for you lately? I remember you used to paint with your mom."
 - Infer effectiveness from subsequent conversations
 - Detect patterns (e.g., user always responds well to practical advice)
 - Build personalized support profile
-- Adapt future strategy selection based on what worked before
+- Adapt future **Decision Engine** selections based on what worked before
+- Inform future node selection decisions with effectiveness data
 
 ## Future Enhancements
 
