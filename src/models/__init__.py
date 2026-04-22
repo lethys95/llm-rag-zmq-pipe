@@ -1,11 +1,14 @@
 """Data models for structured outputs."""
 
-from .sentiment import SentimentAnalysis, DialogueInput
+from .sentiment import DialogueInput
+from .emotional_state import EmotionalState
+from .user_fact import UserFact
 from .memory import MemoryMetadata, ConversationState, TrustAnalysis, TrustRecord
 
 __all__ = [
-    "SentimentAnalysis",
     "DialogueInput",
+    "EmotionalState",
+    "UserFact",
     "MemoryMetadata",
     "ConversationState",
     "TrustAnalysis",

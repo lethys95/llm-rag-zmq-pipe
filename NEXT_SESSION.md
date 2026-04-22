@@ -96,6 +96,7 @@ See previous NEXT_SESSION notes — all of that still applies. In addition:
 ## Key files to read first
 1. This file
 2. `docs/PROJECT_VISION.md`
-3. `src/orchestrator.py`
-4. `src/nodes/orchestration/knowledge_broker.py`
-5. `src/nodes/orchestration/node_registry.py`
+3. `docs/BRAINSTORMING.md` — raw feature backlog, most direct source of what nodes need to exist
+4. `src/orchestrator.py`
+5. `src/nodes/orchestration/knowledge_broker.py`
+6. `src/nodes/orchestration/node_registry.py`

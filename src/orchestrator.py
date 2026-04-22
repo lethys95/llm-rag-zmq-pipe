@@ -7,11 +7,16 @@ import time
 from src.communication.zmq_handler import ZMQHandler
 from src.config.settings import Settings
 from src.handlers.primary_response import PrimaryResponseHandler
-from src.handlers.sentiment_analysis import SentimentAnalysisHandler
+from src.handlers.emotional_state import EmotionalStateHandler
+from src.handlers.user_fact_extraction import UserFactExtractionHandler
+from src.handlers.memory_retrieval import MemoryRetrievalHandler
+from src.handlers.needs_analysis import NeedsAnalysisHandler
+from src.handlers.response_strategy import ResponseStrategyHandler
+from src.rag.algorithms.memory_chrono_decay import MemoryDecayAlgorithm
 from src.llm.openrouter import OpenRouterLLM
 from src.models.sentiment import DialogueInput
 from src.nodes.core.result import NodeStatus
-from src.nodes.orchestration.decision_engine import DecisionEngine
+from src.nodes.orchestration.coordinator import Coordinator
 from src.nodes.orchestration.knowledge_broker import KnowledgeBroker
 from src.nodes.orchestration.node_registry import NodeRegistry
 from src.rag.embeddings import EmbeddingService
@@ -44,12 +49,13 @@ class Orchestrator:
         self.settings = settings
         self._running = False
         self._zmq = ZMQHandler()
-        self._registry, self._decision_engine = self._build()
+        self._registry, self._coordinator = self._build()
 
-    def _build(self) -> tuple[NodeRegistry, DecisionEngine]:
+    def _build(self) -> tuple[NodeRegistry, Coordinator]:
         s = self.settings
 
-        llm = OpenRouterLLM()
+        worker_llm = OpenRouterLLM(config=s.sentiment_llm)   # fast: gpt-oss-120b via Cerebras
+        primary_llm = OpenRouterLLM(config=s.primary_llm)    # frontier: glm-4.7 via Cerebras
         rag = QdrantRAG(
             collection_name=s.qdrant.collection_name,
             embedding_dim=s.qdrant.embedding_dim,
@@ -65,32 +71,62 @@ class Orchestrator:
         conversation_store = ConversationStore()
 
         primary_response_handler = PrimaryResponseHandler(
-            llm_provider=llm,
+            llm_provider=primary_llm,
             rag_provider=rag,
             conversation_store=conversation_store,
         )
-        sentiment_analysis_handler = SentimentAnalysisHandler(
-            llm_provider=llm,
+        emotional_state_handler = EmotionalStateHandler(
+            llm_provider=worker_llm,
+            max_retries=s.sentiment.max_retries,
+            retry_delay=s.sentiment.retry_delay,
+        )
+        user_fact_extraction_handler = UserFactExtractionHandler(
+            llm_provider=worker_llm,
             rag_provider=rag,
             embedding_service=embedding_service,
+            max_retries=s.sentiment.max_retries,
+            retry_delay=s.sentiment.retry_delay,
+        )
+        memory_decay = MemoryDecayAlgorithm(
+            memory_half_life_days=s.memory_decay.half_life_days,
+            chrono_weight=s.memory_decay.chrono_weight,
+            retrieval_threshold=s.memory_decay.retrieval_threshold,
+            prune_threshold=s.memory_decay.prune_threshold,
+            max_documents=s.memory_decay.max_documents,
+        )
+        memory_retrieval_handler = MemoryRetrievalHandler(
+            rag=rag,
+            embedding_service=embedding_service,
+            memory_decay=memory_decay,
+        )
+        needs_analysis_handler = NeedsAnalysisHandler(
+            llm_provider=worker_llm,
+            max_retries=s.sentiment.max_retries,
+            retry_delay=s.sentiment.retry_delay,
+        )
+        response_strategy_handler = ResponseStrategyHandler(
+            llm_provider=worker_llm,
             max_retries=s.sentiment.max_retries,
             retry_delay=s.sentiment.retry_delay,
         )
 
         registry = NodeRegistry.build(
             zmq_handler=self._zmq,
-            llm=llm,
             rag=rag,
             embedding_service=embedding_service,
             conversation_store=conversation_store,
             primary_response_handler=primary_response_handler,
-            sentiment_analysis_handler=sentiment_analysis_handler,
+            emotional_state_handler=emotional_state_handler,
+            user_fact_extraction_handler=user_fact_extraction_handler,
+            memory_retrieval_handler=memory_retrieval_handler,
+            needs_analysis_handler=needs_analysis_handler,
+            response_strategy_handler=response_strategy_handler,
         )
 
-        decision_engine = DecisionEngine(_llm_provider=llm)
+        coordinator = Coordinator(_llm_provider=worker_llm)
 
         logger.info("Built registry with %d nodes", len(registry))
-        return registry, decision_engine
+        return registry, coordinator
 
     # ------------------------------------------------------------------
     # Public interface
@@ -140,7 +176,7 @@ class Orchestrator:
         )
 
         for _ in range(_MAX_NODES_PER_REQUEST):
-            node_name = self._decision_engine.select_node(broker, self._registry)
+            node_name = self._coordinator.select_node(broker, self._registry)
             if node_name is None:
                 break
 

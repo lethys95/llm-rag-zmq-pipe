@@ -122,57 +122,50 @@ class PrimaryResponseHandler:
         """
         parts = []
 
-        # Add sentiment analysis
-        if "sentiment" in analyzed_context:
-            sentiment = analyzed_context["sentiment"]
-            sentiment_parts = []
-            if sentiment.sentiment:
-                sentiment_parts.append(f"Current Sentiment: {sentiment.sentiment}")
-            if sentiment.emotional_tone:
-                sentiment_parts.append(f"Emotional Tone: {sentiment.emotional_tone}")
-            if sentiment.key_topics:
-                sentiment_parts.append(f"Topics: {', '.join(sentiment.key_topics)}")
-            if sentiment.confidence is not None:
-                sentiment_parts.append(f"Confidence: {sentiment.confidence:.2f}")
-            if sentiment_parts:
-                parts.append("\n".join(sentiment_parts))
-
-        # Add trust analysis
-        if "trust_analysis" in analyzed_context:
-            trust = analyzed_context["trust_analysis"]
-            if trust.score is not None:
-                parts.append(f"Trust Level: {trust.score:.2f}")
-            if trust.relationship_stage:
-                parts.append(f"Relationship Stage: {trust.relationship_stage}")
+        # Add emotional state
+        if "emotional_state" in analyzed_context:
+            state = analyzed_context["emotional_state"]
+            emotion_parts = []
+            dominant = sorted(
+                [(k, v) for k, v in state.model_dump().items()
+                 if k not in ("valence", "arousal", "dominance", "confidence", "summary")
+                 and isinstance(v, float) and v > 0.1],
+                key=lambda x: x[1], reverse=True,
+            )[:3]
+            if dominant:
+                emotion_parts.append("Emotions: " + ", ".join(f"{k}: {v:.2f}" for k, v in dominant))
+            if state.summary:
+                emotion_parts.append(f"State: {state.summary}")
+            if emotion_parts:
+                parts.append("\n".join(emotion_parts))
 
         # Add needs analysis
         if "needs_analysis" in analyzed_context:
             needs = analyzed_context["needs_analysis"]
+            need_parts = []
             if needs.primary_needs:
-                parts.append(f"Primary Needs: {', '.join(needs.primary_needs)}")
+                need_parts.append(f"Primary needs: {', '.join(needs.primary_needs)}")
             if needs.unmet_needs:
-                parts.append(f"Unmet Needs: {', '.join(needs.unmet_needs)}")
-            if needs.need_urgency > 0.7:
-                parts.append(f"Urgency: {needs.need_urgency:.2f}")
-            if needs.suggested_approach:
-                parts.append(f"Suggested Approach: {needs.suggested_approach}")
+                need_parts.append(f"Unmet: {', '.join(needs.unmet_needs)}")
+            if needs.need_urgency > 0.6:
+                need_parts.append(f"Urgency: {needs.need_urgency:.2f}")
+            if needs.context_summary:
+                need_parts.append(needs.context_summary)
+            if need_parts:
+                parts.append("\n".join(need_parts))
 
-        # Add evaluated memories
-        if "evaluated_memories" in analyzed_context:
-            memories = analyzed_context["evaluated_memories"]
-            if memories:
-                memory_parts = []
-                for i, (doc, evaluation) in enumerate(memories[:5], 1):
-                    summary = evaluation.get("summary") if evaluation else doc.content
-                    memory_parts.append(f"Memory {i}: {summary}")
-                if memory_parts:
-                    parts.append("Relevant Memories:\n" + "\n".join(memory_parts))
+        # Add retrieved memories
+        if "user_facts" in analyzed_context:
+            facts = analyzed_context["user_facts"]
+            if facts:
+                fact_lines = [f"- {f.claim}" for f in facts[:8]]
+                parts.append("What I know about you:\n" + "\n".join(fact_lines))
 
         # Add idle time
         if "idle_time_minutes" in analyzed_context:
             idle = analyzed_context["idle_time_minutes"]
             if idle > 0:
-                parts.append(f"User Idle Time: {idle:.1f} minutes")
+                parts.append(f"User idle time: {idle:.1f} minutes")
 
         if parts:
             return "\n\n---\n\n".join(parts)
@@ -327,8 +320,12 @@ class PrimaryResponseHandler:
         default_with_context = self.SYSTEM_PROMPT_WITH_CONTEXT
         default_without_context = self.SYSTEM_PROMPT_WITHOUT_CONTEXT
 
+        strategy_addition = ""
+        if analyzed_context and "response_strategy" in analyzed_context:
+            strategy_addition = "\n\n" + analyzed_context["response_strategy"].system_prompt_addition
+
         if context and context.strip():
-            system_prompt = system_prompt_override or default_with_context
+            system_prompt = (system_prompt_override or default_with_context) + strategy_addition
             logger.debug(
                 "Built augmented prompt with context%s",
                 " and custom system prompt" if system_prompt_override else "",
@@ -344,7 +341,7 @@ class PrimaryResponseHandler:
 
                 Assistant Response:""")
 
-        system_prompt = system_prompt_override or default_without_context
+        system_prompt = (system_prompt_override or default_without_context) + strategy_addition
         logger.debug(
             "Built prompt without context%s",
             " and custom system prompt" if system_prompt_override else "",

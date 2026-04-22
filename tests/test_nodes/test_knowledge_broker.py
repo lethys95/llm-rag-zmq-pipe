@@ -2,7 +2,8 @@
 
 import pytest
 from src.nodes.orchestration.knowledge_broker import KnowledgeBroker
-from src.models.sentiment import DialogueInput, SentimentAnalysis
+from src.models.sentiment import DialogueInput
+from src.models.emotional_state import EmotionalState
 
 
 @pytest.fixture
@@ -12,7 +13,8 @@ def empty_broker():
 
 def test_broker_initialises_with_no_fields(empty_broker):
     assert empty_broker.dialogue_input is None
-    assert empty_broker.sentiment_analysis is None
+    assert empty_broker.emotional_state is None
+    assert empty_broker.user_facts == []
     assert empty_broker.primary_response is None
     assert empty_broker.zmq_identity is None
     assert empty_broker.retrieved_documents == []
@@ -64,12 +66,14 @@ def test_get_analyzed_context_excludes_none_fields(empty_broker):
 
 
 def test_get_analyzed_context_includes_populated_fields(broker):
-    sentiment = SentimentAnalysis(
-        sentiment="negative",
-        confidence=0.9,
-        memory_owner="user",
+    state = EmotionalState(
+        sadness=0.8,
+        valence=-0.6,
+        arousal=0.4,
+        dominance=0.3,
+        confidence=0.8,
     )
-    broker.sentiment_analysis = sentiment
+    broker.emotional_state = state
     context = broker.get_analyzed_context()
-    assert "sentiment" in context
-    assert context["sentiment"] is sentiment
+    assert "emotional_state" in context
+    assert context["emotional_state"] is state

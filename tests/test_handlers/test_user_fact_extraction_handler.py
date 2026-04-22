@@ -1,0 +1,126 @@
+import json
+import pytest
+from unittest.mock import MagicMock
+
+from src.handlers.user_fact_extraction import UserFactExtractionHandler
+from src.models.user_fact import UserFact
+
+
+VALID_RESPONSE = json.dumps([
+    {
+        "claim": "user likes pepperoni pizza",
+        "sentiment": "positive",
+        "confidence": 0.9,
+        "chrono_relevance": 0.85,
+        "subject": "food preferences",
+    },
+    {
+        "claim": "user dislikes pineapple on pizza",
+        "sentiment": "negative",
+        "confidence": 0.95,
+        "chrono_relevance": 0.8,
+        "subject": "food preferences",
+    },
+])
+
+EMPTY_RESPONSE = "[]"
+
+
+@pytest.fixture
+def mock_llm():
+    return MagicMock()
+
+
+@pytest.fixture
+def mock_rag():
+    m = MagicMock()
+    m.store.return_value = "point-id"
+    return m
+
+
+@pytest.fixture
+def handler(mock_llm, mock_rag):
+    embedding_service = MagicMock()
+    embedding_service.encode.return_value = [0.1] * 384
+    return UserFactExtractionHandler(
+        llm_provider=mock_llm,
+        rag_provider=mock_rag,
+        embedding_service=embedding_service,
+        max_retries=3,
+        retry_delay=0.0,
+    )
+
+
+def test_valid_response_returns_user_facts(handler, mock_llm):
+    mock_llm.generate.return_value = VALID_RESPONSE
+    result = handler.extract("I love pepperoni, hate pineapple", speaker="user")
+    assert len(result) == 2
+    assert all(isinstance(f, UserFact) for f in result)
+
+
+def test_memory_owner_set_from_speaker(handler, mock_llm):
+    mock_llm.generate.return_value = VALID_RESPONSE
+    result = handler.extract("message", speaker="alice")
+    assert all(f.memory_owner == "alice" for f in result)
+
+
+def test_fact_fields_correct(handler, mock_llm):
+    mock_llm.generate.return_value = VALID_RESPONSE
+    result = handler.extract("message", speaker="user")
+    first = result[0]
+    assert first.claim == "user likes pepperoni pizza"
+    assert first.sentiment == "positive"
+    assert first.confidence == pytest.approx(0.9)
+    assert first.chrono_relevance == pytest.approx(0.85)
+    assert first.subject == "food preferences"
+
+
+def test_empty_array_returns_empty_list(handler, mock_llm):
+    mock_llm.generate.return_value = EMPTY_RESPONSE
+    result = handler.extract("neutral message", speaker="user")
+    assert result == []
+
+
+def test_invalid_json_returns_empty_list(handler, mock_llm):
+    mock_llm.generate.return_value = "not json"
+    result = handler.extract("message", speaker="user")
+    assert result == []
+
+
+def test_invalid_sentiment_value_returns_empty_list(handler, mock_llm):
+    bad = json.dumps([{
+        "claim": "user likes something",
+        "sentiment": "ecstatic",
+        "confidence": 0.9,
+        "chrono_relevance": 0.5,
+        "subject": "misc",
+    }])
+    mock_llm.generate.return_value = bad
+    result = handler.extract("message", speaker="user")
+    assert result == []
+
+
+def test_rag_store_called_once_per_fact(handler, mock_llm, mock_rag):
+    mock_llm.generate.return_value = VALID_RESPONSE
+    handler.extract("message", speaker="user")
+    assert mock_rag.store.call_count == 2
+
+
+def test_rag_store_not_called_for_empty_result(handler, mock_llm, mock_rag):
+    mock_llm.generate.return_value = EMPTY_RESPONSE
+    handler.extract("message", speaker="user")
+    mock_rag.store.assert_not_called()
+
+
+def test_retries_on_failure_then_succeeds(handler, mock_llm):
+    mock_llm.generate.side_effect = ["not json", "not json", VALID_RESPONSE]
+    result = handler.extract("message", speaker="user")
+    assert len(result) == 2
+    assert mock_llm.generate.call_count == 3
+
+
+def test_exhausted_retries_returns_empty_list(handler, mock_llm):
+    mock_llm.generate.return_value = "not json"
+    result = handler.extract("message", speaker="user")
+    assert result == []
+    assert mock_llm.generate.call_count == 3

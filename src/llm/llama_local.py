@@ -74,7 +74,7 @@ class LlamaLocalLLM(BaseLLM):
         except Exception as e:
             raise ValueError(f"Failed to load model: {e}") from e
 
-    def generate(self, prompt: str) -> str:
+    def generate(self, prompt: str, json_mode: bool = False) -> str:
         logger.debug("Generating response for prompt: %.100s...", prompt)
 
         assert self._model is not None, "Model not loaded"

@@ -1,11 +1,19 @@
 """LLM handlers that compose base LLM providers with specific logic."""
 
-from .sentiment_analysis import SentimentAnalysisHandler
+from .emotional_state import EmotionalStateHandler
+from .user_fact_extraction import UserFactExtractionHandler
+from .memory_retrieval import MemoryRetrievalHandler
+from .needs_analysis import NeedsAnalysisHandler
+from .response_strategy import ResponseStrategyHandler
 from .primary_response import PrimaryResponseHandler
 from .context_interpreter import ContextInterpreterHandler
 
 __all__ = [
-    "SentimentAnalysisHandler",
+    "EmotionalStateHandler",
+    "UserFactExtractionHandler",
+    "MemoryRetrievalHandler",
+    "NeedsAnalysisHandler",
+    "ResponseStrategyHandler",
     "PrimaryResponseHandler",
     "ContextInterpreterHandler",
 ]

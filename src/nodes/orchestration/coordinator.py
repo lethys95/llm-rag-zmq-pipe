@@ -1,4 +1,4 @@
-"""Decision engine for LLM-based node selection."""
+"""Coordinator — LLM-based node selection for each request."""
 
 import logging
 from dataclasses import dataclass
@@ -12,31 +12,22 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class DecisionEngine:
-    """LLM-based reasoning engine to decide which node to run next.
+class Coordinator:
+    """LLM-based coordinator that decides which nodes to run next.
 
-    The orchestrator calls select_node() repeatedly until it returns None,
+    Called repeatedly by the orchestrator until it returns None,
     indicating no more work is needed for this interaction.
     """
 
     _llm_provider: BaseLLM
 
     def select_node(self, broker: KnowledgeBroker, registry: "NodeRegistry") -> str | None:  # noqa: F821
-        """Select the next node to execute based on current broker state.
-
-        Args:
-            broker: Knowledge broker with current context and execution history
-            registry: Node registry to pull available nodes and descriptions from
-
-        Returns:
-            Node name to execute next, or None if processing is complete
-        """
         available = registry.get_names()
         if not available:
             logger.warning("No nodes registered, cannot select")
             return None
 
-        prompt = self._build_selection_prompt(broker, registry)
+        prompt = self._build_prompt(broker, registry)
         response: LLMResponse = self._llm_provider.generate_with_tools(
             prompt,
             [build_select_nodes_tool(registry)],
@@ -45,15 +36,15 @@ class DecisionEngine:
         node_name = self._parse_tool_call(response)
 
         if node_name:
-            logger.info("Selected node: %s", node_name)
+            logger.info("Coordinator selected: %s", node_name)
         else:
-            logger.info("No node selected — processing complete")
+            logger.info("Coordinator: processing complete")
 
         return node_name
 
     def _parse_tool_call(self, response: LLMResponse) -> str | None:
         if not response.tool_calls:
-            logger.warning("No tool calls in LLM response")
+            logger.warning("No tool calls in coordinator response")
             return None
 
         try:
@@ -66,16 +57,16 @@ class DecisionEngine:
             logger.warning("Unexpected tool call: %s", tool_call.function_name)
             return None
         except (KeyError, TypeError):
-            logger.exception("Failed to parse tool call")
+            logger.exception("Failed to parse coordinator tool call")
             return None
 
-    def _build_selection_prompt(self, broker: KnowledgeBroker, registry: "NodeRegistry") -> str:  # noqa: F821
+    def _build_prompt(self, broker: KnowledgeBroker, registry: "NodeRegistry") -> str:  # noqa: F821
         already_run = broker.metadata.execution_order
         already_run_str = ", ".join(already_run) if already_run else "none"
         message = broker.dialogue_input.content if broker.dialogue_input else "(no message)"
 
         return dedent(f"""\
-            You are a decision engine for an AI companion system. Decide which single
+            You are a coordinator for an AI companion system. Decide which single
             processing node should run next.
 
             Available nodes:

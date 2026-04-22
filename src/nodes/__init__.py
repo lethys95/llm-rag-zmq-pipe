@@ -1,7 +1,7 @@
 """Node-based execution system for flexible AI processing."""
 
 from src.nodes.core import NodeResult, NodeStatus, BaseNode, NodeProtocol
-from src.nodes.orchestration import KnowledgeBroker, DecisionEngine
+from src.nodes.orchestration import KnowledgeBroker, Coordinator
 
 __all__ = [
     "NodeResult",
@@ -9,5 +9,5 @@ __all__ = [
     "BaseNode",
     "NodeProtocol",
     "KnowledgeBroker",
-    "DecisionEngine",
+    "Coordinator",
 ]

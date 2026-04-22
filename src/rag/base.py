@@ -45,6 +45,29 @@ class BaseRAG(ABC):
         """
 
     @abstractmethod
+    def retrieve_documents_with_embedding(
+        self,
+        query_embedding: list[float],
+        limit: int = 10,
+        score_threshold: float | None = None,
+        filter_conditions: object | None = None,
+    ) -> list["RAGDocument"]:
+        """Retrieve documents using a pre-computed embedding vector.
+
+        Allows callers to control the embedding step and pass optional
+        provider-specific filter conditions (e.g. Qdrant Filter objects).
+
+        Args:
+            query_embedding: Pre-computed embedding for the query
+            limit: Maximum number of results to retrieve
+            score_threshold: Minimum similarity score threshold
+            filter_conditions: Optional provider-specific filter
+
+        Returns:
+            List of RAGDocument objects
+        """
+
+    @abstractmethod
     def store(
         self,
         text: str,

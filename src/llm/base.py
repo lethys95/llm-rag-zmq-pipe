@@ -56,11 +56,13 @@ class BaseLLM(ABC):
     """
 
     @abstractmethod
-    def generate(self, prompt: str) -> str:
+    def generate(self, prompt: str, json_mode: bool = False) -> str:
         """Generate a response from the LLM.
 
         Args:
             prompt: The input prompt to generate a response for
+            json_mode: If True, instruct the API to constrain output to valid JSON.
+                       Not all providers support this; falls back gracefully if not.
 
         Returns:
             The generated response as a string

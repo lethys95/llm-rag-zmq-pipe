@@ -4,9 +4,12 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from src.models.sentiment import DialogueInput, SentimentAnalysis
+from src.models.sentiment import DialogueInput
+from src.models.emotional_state import EmotionalState
+from src.models.user_fact import UserFact
 from src.models.memory import TrustAnalysis
 from src.models.analysis import MemoryEvaluation, NeedsAnalysis
+from src.models.response_strategy import ResponseStrategy
 from src.rag.selector import RAGDocument
 
 logger = logging.getLogger(__name__)
@@ -51,7 +54,8 @@ class KnowledgeBroker:
     """
 
     dialogue_input: DialogueInput | None = None
-    sentiment_analysis: SentimentAnalysis | None = None
+    emotional_state: EmotionalState | None = None
+    user_facts: list[UserFact] = field(default_factory=list)
     primary_response: str | None = None
     ack_status: str | None = None
     ack_message: str | None = None
@@ -63,13 +67,16 @@ class KnowledgeBroker:
     evaluated_memories: list[tuple[RAGDocument, MemoryEvaluation]] = field(
         default_factory=list
     )
-    conversation_history: list[SentimentAnalysis] = field(default_factory=list)
+    conversation_history: list[EmotionalState] = field(default_factory=list)
 
     # Trust analysis field
     trust_analysis: TrustAnalysis | None = None
 
     # Needs analysis field
     needs_analysis: NeedsAnalysis | None = None
+
+    # Response strategy field
+    response_strategy: ResponseStrategy | None = None
 
     # Detox results field
     detox_results: dict[str, object] = field(default_factory=dict)
@@ -106,8 +113,11 @@ class KnowledgeBroker:
         """
         context = {}
 
-        if self.sentiment_analysis:
-            context["sentiment"] = self.sentiment_analysis
+        if self.emotional_state:
+            context["emotional_state"] = self.emotional_state
+
+        if self.user_facts:
+            context["user_facts"] = self.user_facts
 
         if self.evaluated_memories:
             context["evaluated_memories"] = [
@@ -119,6 +129,9 @@ class KnowledgeBroker:
 
         if self.needs_analysis:
             context["needs_analysis"] = self.needs_analysis
+
+        if self.response_strategy:
+            context["response_strategy"] = self.response_strategy
 
         if self.conversation_history:
             context["conversation_history"] = self.conversation_history
@@ -136,7 +149,7 @@ class KnowledgeBroker:
             1
             for field_name in [
                 "dialogue_input",
-                "sentiment_analysis",
+                "emotional_state",
                 "primary_response",
                 "ack_status",
                 "ack_message",

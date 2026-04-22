@@ -10,7 +10,7 @@ from src.nodes.orchestration.knowledge_broker import KnowledgeBroker
 from src.storage.conversation_store import ConversationStore
 from src.rag.base import BaseRAG
 from src.rag.embeddings import EmbeddingService
-from src.models.sentiment import SentimentAnalysis
+from src.models.emotional_state import EmotionalState
 
 
 @dataclass
@@ -19,11 +19,10 @@ class ConversationMetadata:
 
     timestamp: str
     speaker: str
-    relevance: float = 0.5
-    chrono_relevance: float = 0.5
-    sentiment: str | None = None
-    topics: list[str] = field(default_factory=list)
-    context_summary: str | None = None
+    valence: float | None = None
+    arousal: float | None = None
+    dominance: float | None = None
+    emotional_summary: str | None = None
 
 @register_node
 class StoreConversationNode(BaseNode):
@@ -47,10 +46,9 @@ class StoreConversationNode(BaseNode):
         try:
             dialogue_input = broker.dialogue_input
             response = broker.primary_response
-            sentiment = broker.sentiment_analysis
+            emotional_state = broker.emotional_state
             timestamp = datetime.now().isoformat()
 
-            # Store in SQLite
             self.conversation_store.add_message(
                 speaker=dialogue_input.speaker,
                 message=dialogue_input.content,
@@ -58,12 +56,9 @@ class StoreConversationNode(BaseNode):
                 timestamp=timestamp,
             )
 
-            # Store in Qdrant
             conversation_text = f"{dialogue_input.speaker}: {dialogue_input.content}\nAssistant: {response}"
             embedding = self.embedding_service.encode(conversation_text)
-            metadata_obj = self._prepare_metadata(
-                timestamp, dialogue_input.speaker, sentiment
-            )
+            metadata_obj = self._prepare_metadata(timestamp, dialogue_input.speaker, emotional_state)
 
             self.rag_provider.store(
                 text=conversation_text,
@@ -76,23 +71,15 @@ class StoreConversationNode(BaseNode):
             return NodeResult(status=NodeStatus.FAILED, error=str(e))
 
     def _prepare_metadata(
-        self, timestamp: str, speaker: str, sentiment: SentimentAnalysis | None = None
+        self, timestamp: str, speaker: str, emotional_state: EmotionalState | None = None
     ) -> ConversationMetadata:
-        if sentiment:
+        if emotional_state:
             return ConversationMetadata(
                 timestamp=timestamp,
                 speaker=speaker,
-                relevance=(
-                    sentiment.relevance if sentiment.relevance is not None else 0.5
-                ),
-                chrono_relevance=(
-                    sentiment.chrono_relevance
-                    if sentiment.chrono_relevance is not None
-                    else 0.5
-                ),
-                sentiment=sentiment.sentiment,
-                topics=sentiment.key_topics or [],
-                context_summary=sentiment.context_summary,
+                valence=emotional_state.valence,
+                arousal=emotional_state.arousal,
+                dominance=emotional_state.dominance,
+                emotional_summary=emotional_state.summary,
             )
-        else:
-            return ConversationMetadata(timestamp=timestamp, speaker=speaker)
+        return ConversationMetadata(timestamp=timestamp, speaker=speaker)

@@ -7,7 +7,7 @@ from typing import Any
 
 import requests
 
-from src.config.settings import settings
+from src.config.settings import settings, LLMConfig
 from src.llm.base import BaseLLM, ToolCall, ToolDefinition, LLMResponse
 
 logger = logging.getLogger(__name__)
@@ -35,9 +35,9 @@ class GenerationPayload:
     tools: list[dict[str, Any]] | None = None
     tool_choice: dict[str, Any] | str | None = None
     provider: ProviderConfig | None = None
+    response_format: dict[str, str] | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert payload to dict for JSON serialization."""
         result: dict[str, Any] = {
             "model": self.model,
             "messages": [{"role": m.role, "content": m.content} for m in self.messages],
@@ -50,19 +50,25 @@ class GenerationPayload:
             result["tool_choice"] = self.tool_choice
         if self.provider is not None:
             result["provider"] = asdict(self.provider)
+        if self.response_format is not None:
+            result["response_format"] = self.response_format
         return result
 
 
 class OpenRouterLLM(BaseLLM):
     """OpenRouter API LLM provider.
 
-    This provider sends requests to the OpenRouter API for LLM generation.
-    Configuration is read from the settings singleton.
+    Model configuration is passed at construction time via LLMConfig,
+    allowing different instances to use different models (e.g. worker vs primary).
+    Generation parameters (temperature, max_tokens) are read from the settings singleton.
     """
 
     API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-    def generate(self, prompt: str) -> str:
+    def __init__(self, config: LLMConfig) -> None:
+        self._config = config
+
+    def generate(self, prompt: str, json_mode: bool = False) -> str:
         """Generate a response from OpenRouter API.
 
         Args:
@@ -81,19 +87,18 @@ class OpenRouterLLM(BaseLLM):
             "Content-Type": "application/json",
         }
 
-        llm_config = settings.primary_llm
         payload = GenerationPayload(
-            model=llm_config.openrouter_model,
+            model=self._config.openrouter_model,
             messages=[GenerationMessage(role="user", content=prompt)],
             temperature=settings.temperature,
             max_tokens=settings.max_tokens,
+            response_format={"type": "json_object"} if json_mode else None,
         )
 
-        # Add provider configuration if specified
-        if llm_config.openrouter_provider:
+        if self._config.openrouter_provider:
             payload.provider = ProviderConfig(
-                allow_fallbacks=llm_config.openrouter_provider_allow_fallbacks,
-                order=[llm_config.openrouter_provider],
+                allow_fallbacks=self._config.openrouter_provider_allow_fallbacks,
+                order=[self._config.openrouter_provider],
             )
 
         try:
@@ -131,9 +136,8 @@ class OpenRouterLLM(BaseLLM):
             "Content-Type": "application/json",
         }
 
-        llm_config = settings.primary_llm
         payload = GenerationPayload(
-            model=llm_config.openrouter_model,
+            model=self._config.openrouter_model,
             messages=[GenerationMessage(role="user", content=prompt)],
             temperature=settings.temperature,
             max_tokens=settings.max_tokens,
@@ -141,11 +145,10 @@ class OpenRouterLLM(BaseLLM):
             tool_choice=tool_choice,
         )
 
-        # Add provider configuration if specified
-        if llm_config.openrouter_provider:
+        if self._config.openrouter_provider:
             payload.provider = ProviderConfig(
-                allow_fallbacks=llm_config.openrouter_provider_allow_fallbacks,
-                order=[llm_config.openrouter_provider],
+                allow_fallbacks=self._config.openrouter_provider_allow_fallbacks,
+                order=[self._config.openrouter_provider],
             )
 
         try:
