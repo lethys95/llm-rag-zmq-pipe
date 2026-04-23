@@ -5,6 +5,7 @@ from .user_fact_extraction import UserFactExtractionHandler
 from .memory_retrieval import MemoryRetrievalHandler
 from .needs_analysis import NeedsAnalysisHandler
 from .response_strategy import ResponseStrategyHandler
+from .memory_advisor import MemoryAdvisorHandler
 from .primary_response import PrimaryResponseHandler
 from .context_interpreter import ContextInterpreterHandler
 
@@ -14,6 +15,7 @@ __all__ = [
     "MemoryRetrievalHandler",
     "NeedsAnalysisHandler",
     "ResponseStrategyHandler",
+    "MemoryAdvisorHandler",
     "PrimaryResponseHandler",
     "ContextInterpreterHandler",
 ]

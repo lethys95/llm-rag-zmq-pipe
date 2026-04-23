@@ -1,10 +1,9 @@
-"""Conversation storage node for persisting messages."""
+"""Conversation persistence — stores each turn to SQLite and Qdrant."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 
 from src.nodes.core.base_node import BaseNode
-from src.nodes.orchestration.node_registry_decorator import register_node
 from src.nodes.core.result import NodeResult, NodeStatus
 from src.nodes.orchestration.knowledge_broker import KnowledgeBroker
 from src.storage.conversation_store import ConversationStore
@@ -15,8 +14,6 @@ from src.models.emotional_state import EmotionalState
 
 @dataclass
 class ConversationMetadata:
-    """Metadata for storing conversation in RAG."""
-
     timestamp: str
     speaker: str
     valence: float | None = None
@@ -24,9 +21,13 @@ class ConversationMetadata:
     dominance: float | None = None
     emotional_summary: str | None = None
 
-@register_node
-class StoreConversationNode(BaseNode):
-    """Node that stores conversation in SQLite and Qdrant."""
+
+class ConversationStorage(BaseNode):
+    """Persists a conversation turn to SQLite (recent history) and Qdrant (long-term memory).
+
+    Not coordinator-selectable. Run by the orchestrator as a background task
+    after the response has been forwarded to TTS.
+    """
 
     def __init__(
         self,
@@ -40,7 +41,7 @@ class StoreConversationNode(BaseNode):
         self.embedding_service = embedding_service
 
     def get_description(self) -> str:
-        return "Persist the conversation turn (user message + response) to SQLite and Qdrant. Run after response is sent."
+        return "Persist conversation turn to SQLite and Qdrant. Runs as background task after response is sent."
 
     async def execute(self, broker: KnowledgeBroker) -> NodeResult:
         try:

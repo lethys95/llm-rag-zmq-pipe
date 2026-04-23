@@ -13,6 +13,7 @@ from src.models.sentiment import DialogueInput
 from src.models.user_fact import UserFact
 from src.models.analysis import MemoryEvaluation, NeedsAnalysis
 from src.models.response_strategy import ResponseStrategy
+from src.models.advisor import AdvisorOutput
 from src.rag.selector import RAGDocument
 
 logger = logging.getLogger(__name__)
@@ -80,6 +81,9 @@ class KnowledgeBroker:
     needs_analysis: NeedsAnalysis | None = None
     response_strategy: ResponseStrategy | None = None
 
+    # --- Advisor outputs ---
+    advisor_outputs: list[AdvisorOutput] = field(default_factory=list)
+
     # --- Detox ---
     # Placeholder — detox design is not settled. See PSYCHOLOGY.md.
     detox_results: dict[str, object] = field(default_factory=dict)
@@ -138,6 +142,12 @@ class KnowledgeBroker:
         else:
             lines.append("Response strategy: not yet selected")
 
+        if self.advisor_outputs:
+            names = ", ".join(a.advisor for a in self.advisor_outputs)
+            lines.append(f"Advisor outputs: {names}")
+        else:
+            lines.append("Advisor outputs: none yet")
+
         if self.detox_results:
             lines.append("Calibration notes: present")
 
@@ -167,6 +177,9 @@ class KnowledgeBroker:
 
         if self.response_strategy:
             context["response_strategy"] = self.response_strategy
+
+        if self.advisor_outputs:
+            context["advisor_outputs"] = self.advisor_outputs
 
         if self.idle_time_minutes is not None:
             context["idle_time_minutes"] = self.idle_time_minutes

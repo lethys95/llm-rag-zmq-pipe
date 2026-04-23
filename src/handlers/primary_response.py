@@ -299,6 +299,18 @@ class PrimaryResponseHandler:
         ]
         return "\n\n".join(semantic_parts)
 
+    def _format_advisor_outputs(self, outputs: list) -> str:
+        if not outputs:
+            return ""
+        relevant = [o for o in outputs if o.potency >= 0.3]
+        if not relevant:
+            return ""
+        relevant.sort(key=lambda o: o.potency, reverse=True)
+        lines = ["\nAdvisory context:"]
+        for o in relevant:
+            lines.append(f"[{o.advisor}] {o.advice}")
+        return "\n".join(lines) + "\n"
+
     def _build_prompt(
         self,
         prompt: str,
@@ -324,6 +336,10 @@ class PrimaryResponseHandler:
         if analyzed_context and "response_strategy" in analyzed_context:
             strategy_addition = "\n\n" + analyzed_context["response_strategy"].system_prompt_addition
 
+        advisor_guidance = ""
+        if analyzed_context and "advisor_outputs" in analyzed_context:
+            advisor_guidance = self._format_advisor_outputs(analyzed_context["advisor_outputs"])
+
         if context and context.strip():
             system_prompt = (system_prompt_override or default_with_context) + strategy_addition
             logger.debug(
@@ -335,13 +351,22 @@ class PrimaryResponseHandler:
 
                 Context:
                 {context}
-
+                {advisor_guidance}
                 User Question:
                 {prompt}
 
                 Assistant Response:""")
 
         system_prompt = (system_prompt_override or default_without_context) + strategy_addition
+        if advisor_guidance:
+            return dedent(f"""
+                {system_prompt}
+                {advisor_guidance}
+                User Question:
+                {prompt}
+
+                Assistant Response:""")
+
         logger.debug(
             "Built prompt without context%s",
             " and custom system prompt" if system_prompt_override else "",
