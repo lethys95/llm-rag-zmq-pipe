@@ -26,7 +26,7 @@ class NeedsAnalysisNode(BaseNode):
         result = self.handler.analyze(
             message=broker.dialogue_input.content,
             speaker=broker.dialogue_input.speaker,
-            emotional_state=broker.emotional_state,
+            emotional_state=None,  # emotional_state broker field suspended — see knowledge_broker.py
             retrieved_documents=broker.retrieved_documents,
         )
 

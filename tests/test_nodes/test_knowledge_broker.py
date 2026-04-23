@@ -3,7 +3,6 @@
 import pytest
 from src.nodes.orchestration.knowledge_broker import KnowledgeBroker
 from src.models.sentiment import DialogueInput
-from src.models.emotional_state import EmotionalState
 
 
 @pytest.fixture
@@ -13,7 +12,6 @@ def empty_broker():
 
 def test_broker_initialises_with_no_fields(empty_broker):
     assert empty_broker.dialogue_input is None
-    assert empty_broker.emotional_state is None
     assert empty_broker.user_facts == []
     assert empty_broker.primary_response is None
     assert empty_broker.zmq_identity is None
@@ -59,21 +57,24 @@ def test_get_execution_summary_structure(empty_broker):
     assert summary["skipped_nodes"] == []
 
 
-def test_get_analyzed_context_excludes_none_fields(empty_broker):
+def test_get_analyzed_context_excludes_empty_fields(empty_broker):
     context = empty_broker.get_analyzed_context()
-    assert "sentiment" not in context
     assert "needs_analysis" not in context
+    assert "user_facts" not in context
+    assert "evaluated_memories" not in context
 
 
-def test_get_analyzed_context_includes_populated_fields(broker):
-    state = EmotionalState(
-        sadness=0.8,
-        valence=-0.6,
-        arousal=0.4,
-        dominance=0.3,
-        confidence=0.8,
+def test_get_analyzed_context_includes_needs_analysis(broker):
+    from src.models.analysis import NeedsAnalysis
+    needs = NeedsAnalysis(
+        belonging=0.7,
+        need_urgency=0.5,
+        need_persistence=0.6,
+        context_summary="Feeling lonely.",
+        primary_needs=["belonging"],
+        unmet_needs=["belonging"],
     )
-    broker.emotional_state = state
+    broker.needs_analysis = needs
     context = broker.get_analyzed_context()
-    assert "emotional_state" in context
-    assert context["emotional_state"] is state
+    assert "needs_analysis" in context
+    assert context["needs_analysis"] is needs

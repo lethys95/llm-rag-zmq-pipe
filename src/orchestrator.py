@@ -7,9 +7,9 @@ import time
 from src.communication.zmq_handler import ZMQHandler
 from src.config.settings import Settings
 from src.handlers.primary_response import PrimaryResponseHandler
-from src.handlers.emotional_state import EmotionalStateHandler
 from src.handlers.user_fact_extraction import UserFactExtractionHandler
 from src.handlers.memory_retrieval import MemoryRetrievalHandler
+from src.handlers.memory_evaluation import MemoryEvaluationHandler
 from src.handlers.needs_analysis import NeedsAnalysisHandler
 from src.handlers.response_strategy import ResponseStrategyHandler
 from src.rag.algorithms.memory_chrono_decay import MemoryDecayAlgorithm
@@ -75,11 +75,6 @@ class Orchestrator:
             rag_provider=rag,
             conversation_store=conversation_store,
         )
-        emotional_state_handler = EmotionalStateHandler(
-            llm_provider=worker_llm,
-            max_retries=s.sentiment.max_retries,
-            retry_delay=s.sentiment.retry_delay,
-        )
         user_fact_extraction_handler = UserFactExtractionHandler(
             llm_provider=worker_llm,
             rag_provider=rag,
@@ -99,6 +94,11 @@ class Orchestrator:
             embedding_service=embedding_service,
             memory_decay=memory_decay,
         )
+        memory_evaluation_handler = MemoryEvaluationHandler(
+            llm_provider=worker_llm,
+            max_retries=s.sentiment.max_retries,
+            retry_delay=s.sentiment.retry_delay,
+        )
         needs_analysis_handler = NeedsAnalysisHandler(
             llm_provider=worker_llm,
             max_retries=s.sentiment.max_retries,
@@ -116,14 +116,17 @@ class Orchestrator:
             embedding_service=embedding_service,
             conversation_store=conversation_store,
             primary_response_handler=primary_response_handler,
-            emotional_state_handler=emotional_state_handler,
             user_fact_extraction_handler=user_fact_extraction_handler,
             memory_retrieval_handler=memory_retrieval_handler,
+            memory_evaluation_handler=memory_evaluation_handler,
             needs_analysis_handler=needs_analysis_handler,
             response_strategy_handler=response_strategy_handler,
         )
 
-        coordinator = Coordinator(_llm_provider=worker_llm)
+        coordinator = Coordinator(
+            _llm_provider=worker_llm,
+            _conversation_store=conversation_store,
+        )
 
         logger.info("Built registry with %d nodes", len(registry))
         return registry, coordinator

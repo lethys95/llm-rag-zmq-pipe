@@ -44,7 +44,7 @@ async def test_handler_called_with_broker_fields(node, handler, broker):
     handler.analyze.assert_called_once_with(
         message=broker.dialogue_input.content,
         speaker=broker.dialogue_input.speaker,
-        emotional_state=broker.emotional_state,
+        emotional_state=None,
         retrieved_documents=broker.retrieved_documents,
     )
 

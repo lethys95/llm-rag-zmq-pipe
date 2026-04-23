@@ -42,7 +42,7 @@ async def test_handler_called_with_broker_fields(node, handler, broker):
     await node.execute(broker)
     handler.select.assert_called_once_with(
         needs_analysis=broker.needs_analysis,
-        emotional_state=broker.emotional_state,
+        emotional_state=None,
     )
 
 

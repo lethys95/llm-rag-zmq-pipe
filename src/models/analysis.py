@@ -11,8 +11,6 @@ class MemoryEvaluation:
     relevance: float
     chrono_relevance: float
     reasoning: str
-    should_boost: bool
-    boost_factor: float
 
 
 class NeedsAnalysis(BaseModel):
