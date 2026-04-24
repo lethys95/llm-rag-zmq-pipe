@@ -30,7 +30,7 @@ class MemoryEvaluationNode(BaseNode):
         results = self.handler.evaluate(
             message=broker.dialogue_input.content,
             documents=broker.retrieved_documents,
-            emotional_state=None,  # emotional_state broker field suspended — see knowledge_broker.py
+            emotional_state=broker.emotional_state,
         )
 
         broker.evaluated_memories = results

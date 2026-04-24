@@ -11,6 +11,7 @@ from datetime import datetime
 
 from src.models.sentiment import DialogueInput
 from src.models.user_fact import UserFact
+from src.models.emotional_state import EmotionalState
 from src.models.analysis import MemoryEvaluation, NeedsAnalysis
 from src.models.response_strategy import ResponseStrategy
 from src.models.advisor import AdvisorOutput
@@ -63,11 +64,7 @@ class KnowledgeBroker:
     idle_time_minutes: float | None = None
 
     # --- Classifier outputs ---
-    # emotional_state is commented out pending clarification of its role
-    # in the advisor architecture. Classifiers produce it; advisors should
-    # consume it. Whether it belongs as a first-class broker field or is
-    # internal to advisor nodes is an open question.
-    # emotional_state: EmotionalState | None = None
+    emotional_state: EmotionalState | None = None
 
     user_facts: list[UserFact] = field(default_factory=list)
 
@@ -110,6 +107,15 @@ class KnowledgeBroker:
         to run next without dumping raw data.
         """
         lines = []
+
+        if self.emotional_state:
+            e = self.emotional_state
+            lines.append(
+                f"Emotional state: valence={e.valence:.2f} arousal={e.arousal:.2f} "
+                f"dominance={e.dominance:.2f} confidence={e.confidence:.2f} — {e.summary or 'no summary'}"
+            )
+        else:
+            lines.append("Emotional state: not yet assessed")
 
         if self.user_facts:
             claims = "; ".join(f.claim for f in self.user_facts[:5])

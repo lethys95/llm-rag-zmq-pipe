@@ -171,8 +171,13 @@ class NeedsAnalysisHandler:
         lines = []
         for doc in docs:
             subject = doc.metadata.get("subject", "")
-            sentiment = doc.metadata.get("sentiment", "")
-            tag = f" [{subject}, {sentiment}]" if subject or sentiment else ""
+            valence = doc.metadata.get("valence")
+            parts = []
+            if subject:
+                parts.append(subject)
+            if valence is not None:
+                parts.append(f"valence={float(valence):.2f}")
+            tag = f" [{', '.join(parts)}]" if parts else ""
             lines.append(f"- {doc.content}{tag}")
         return "\n".join(lines)
 

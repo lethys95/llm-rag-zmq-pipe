@@ -24,7 +24,7 @@ class ResponseStrategyNode(BaseNode):
 
         result = self.handler.select(
             needs_analysis=broker.needs_analysis,
-            emotional_state=None,  # emotional_state broker field suspended — see knowledge_broker.py
+            emotional_state=broker.emotional_state,
         )
 
         if result is None:

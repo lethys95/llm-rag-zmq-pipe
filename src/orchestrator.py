@@ -13,6 +13,7 @@ from src.handlers.memory_retrieval import MemoryRetrievalHandler
 from src.handlers.memory_evaluation import MemoryEvaluationHandler
 from src.handlers.needs_analysis import NeedsAnalysisHandler
 from src.handlers.response_strategy import ResponseStrategyHandler
+from src.handlers.emotional_state import EmotionalStateHandler
 from src.handlers.memory_advisor import MemoryAdvisorHandler
 from src.handlers.needs_advisor import NeedsAdvisorHandler
 from src.handlers.strategy_advisor import StrategyAdvisorHandler
@@ -120,6 +121,11 @@ class Orchestrator:
             max_retries=s.sentiment.max_retries,
             retry_delay=s.sentiment.retry_delay,
         )
+        emotional_state_handler = EmotionalStateHandler(
+            llm_provider=worker_llm,
+            max_retries=s.sentiment.max_retries,
+            retry_delay=s.sentiment.retry_delay,
+        )
         needs_advisor_handler = NeedsAdvisorHandler()
         strategy_advisor_handler = StrategyAdvisorHandler()
 
@@ -137,6 +143,7 @@ class Orchestrator:
             needs_analysis_handler=needs_analysis_handler,
             response_strategy_handler=response_strategy_handler,
             memory_advisor_handler=memory_advisor_handler,
+            emotional_state_handler=emotional_state_handler,
             needs_advisor_handler=needs_advisor_handler,
             strategy_advisor_handler=strategy_advisor_handler,
         )

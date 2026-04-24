@@ -12,8 +12,6 @@ def user_facts():
     return [
         UserFact(
             claim="user likes pizza",
-            sentiment="positive",
-            confidence=0.9,
             chrono_relevance=0.8,
             subject="food",
             memory_owner="user",
@@ -46,6 +44,7 @@ async def test_handler_called_with_correct_args(node, fact_handler, broker):
     fact_handler.extract.assert_called_once_with(
         broker.dialogue_input.content,
         broker.dialogue_input.speaker,
+        emotional_state=broker.emotional_state,
     )
 
 

@@ -6,24 +6,20 @@ from src.handlers.user_fact_extraction import UserFactExtractionHandler
 from src.models.user_fact import UserFact
 
 
-VALID_RESPONSE = json.dumps([
+VALID_RESPONSE = json.dumps({"facts": [
     {
         "claim": "user likes pepperoni pizza",
-        "sentiment": "positive",
-        "confidence": 0.9,
         "chrono_relevance": 0.85,
         "subject": "food preferences",
     },
     {
         "claim": "user dislikes pineapple on pizza",
-        "sentiment": "negative",
-        "confidence": 0.95,
         "chrono_relevance": 0.8,
         "subject": "food preferences",
     },
-])
+]})
 
-EMPTY_RESPONSE = "[]"
+EMPTY_RESPONSE = json.dumps({"facts": []})
 
 
 @pytest.fixture
@@ -69,10 +65,21 @@ def test_fact_fields_correct(handler, mock_llm):
     result = handler.extract("message", speaker="user")
     first = result[0]
     assert first.claim == "user likes pepperoni pizza"
-    assert first.sentiment == "positive"
-    assert first.confidence == pytest.approx(0.9)
     assert first.chrono_relevance == pytest.approx(0.85)
     assert first.subject == "food preferences"
+    assert first.valence is None
+    assert first.arousal is None
+    assert first.dominance is None
+
+
+def test_vad_stamped_from_emotional_state(handler, mock_llm):
+    from src.models.emotional_state import EmotionalState
+    mock_llm.generate.return_value = VALID_RESPONSE
+    state = EmotionalState(valence=-0.6, arousal=0.7, dominance=0.3, confidence=0.8)
+    result = handler.extract("message", speaker="user", emotional_state=state)
+    assert result[0].valence == pytest.approx(-0.6)
+    assert result[0].arousal == pytest.approx(0.7)
+    assert result[0].dominance == pytest.approx(0.3)
 
 
 def test_empty_array_returns_empty_list(handler, mock_llm):
@@ -87,14 +94,11 @@ def test_invalid_json_returns_empty_list(handler, mock_llm):
     assert result == []
 
 
-def test_invalid_sentiment_value_returns_empty_list(handler, mock_llm):
-    bad = json.dumps([{
+def test_missing_required_fields_returns_empty_list(handler, mock_llm):
+    bad = json.dumps({"facts": [{
         "claim": "user likes something",
-        "sentiment": "ecstatic",
-        "confidence": 0.9,
-        "chrono_relevance": 0.5,
-        "subject": "misc",
-    }])
+        # missing chrono_relevance and subject
+    }]})
     mock_llm.generate.return_value = bad
     result = handler.extract("message", speaker="user")
     assert result == []

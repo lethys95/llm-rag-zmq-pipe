@@ -35,7 +35,9 @@ class MessageAnalysisNode(BaseNode):
         message = broker.dialogue_input.content
         speaker = broker.dialogue_input.speaker
 
-        user_facts = self.user_fact_extraction_handler.extract(message, speaker)
+        user_facts = self.user_fact_extraction_handler.extract(
+            message, speaker, emotional_state=broker.emotional_state
+        )
         broker.user_facts = user_facts
 
         if not user_facts:

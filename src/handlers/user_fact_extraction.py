@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from src.llm.base import BaseLLM
 from src.rag.base import BaseRAG
 from src.rag.embeddings import EmbeddingService
+from src.models.emotional_state import EmotionalState
 from src.models.user_fact import UserFact
 
 logger = logging.getLogger(__name__)
@@ -37,20 +38,19 @@ class UserFactExtractionHandler:
             0.5  = moderately stable ("user is stressed about work this week")
             0.1  = ephemeral ("user is making pizza tonight")
 
-        Response format — a JSON array:
-        [
-          {
-            "claim": "user likes pepperoni pizza",
-            "sentiment": "positive",
-            "confidence": 0.9,
-            "chrono_relevance": 0.85,
-            "subject": "food preferences"
-          }
-        ]
+        Response format:
+        {
+          "facts": [
+            {
+              "claim": "user likes pepperoni pizza",
+              "chrono_relevance": 0.85,
+              "subject": "food preferences"
+            }
+          ]
+        }
 
-        sentiment must be exactly "positive", "negative", or "neutral".
-        Return [] if no facts can be extracted.
-        Respond ONLY with a valid JSON array. No explanation, no extra text.""")
+        Return {"facts": []} if no facts can be extracted.
+        Respond ONLY with valid JSON. No explanation, no extra text.""")
 
     def __init__(
         self,
@@ -66,13 +66,18 @@ class UserFactExtractionHandler:
         self.max_retries = max_retries
         self.retry_delay = retry_delay
 
-    def extract(self, message: str, speaker: str) -> list[UserFact]:
-        prompt = f"{self.SYSTEM_PROMPT}\n\nUser message:\n{message}\n\nJSON array:"
+    def extract(
+        self,
+        message: str,
+        speaker: str,
+        emotional_state: EmotionalState | None = None,
+    ) -> list[UserFact]:
+        prompt = f"{self.SYSTEM_PROMPT}\n\nUser message:\n{message}\n\nJSON:"
 
         for attempt in range(1, self.max_retries + 1):
             try:
                 raw = self.llm.generate(prompt, json_mode=True)
-                facts = self._parse(raw, speaker)
+                facts = self._parse(raw, speaker, emotional_state)
                 if facts is not None:
                     logger.debug("Extracted %d facts from message", len(facts))
                     if facts:
@@ -87,16 +92,26 @@ class UserFactExtractionHandler:
         logger.error("UserFactExtractionHandler failed after %d attempts", self.max_retries)
         return []
 
-    def _parse(self, raw: str, speaker: str) -> list[UserFact] | None:
+    def _parse(
+        self,
+        raw: str,
+        speaker: str,
+        emotional_state: EmotionalState | None,
+    ) -> list[UserFact] | None:
         try:
             text = raw.strip()
-            start, end = text.find("["), text.rfind("]")
+            start, end = text.find("{"), text.rfind("}")
             if start == -1 or end == -1:
-                raise json.JSONDecodeError("No JSON array found", text, 0)
-            items = json.loads(text[start:end + 1])
+                raise json.JSONDecodeError("No JSON object found", text, 0)
+            data = json.loads(text[start:end + 1])
+            items = data.get("facts", [])
             facts = []
             for item in items:
                 item["memory_owner"] = speaker
+                if emotional_state is not None:
+                    item["valence"] = emotional_state.valence
+                    item["arousal"] = emotional_state.arousal
+                    item["dominance"] = emotional_state.dominance
                 facts.append(UserFact(**item))
             return facts
         except (json.JSONDecodeError, ValidationError, TypeError, KeyError) as e:
@@ -115,8 +130,9 @@ class UserFactExtractionHandler:
                         "timestamp": timestamp,
                         "memory_owner": fact.memory_owner,
                         "claim": fact.claim,
-                        "sentiment": fact.sentiment,
-                        "confidence": fact.confidence,
+                        "valence": fact.valence,
+                        "arousal": fact.arousal,
+                        "dominance": fact.dominance,
                         "chrono_relevance": fact.chrono_relevance,
                         "subject": fact.subject,
                     },
