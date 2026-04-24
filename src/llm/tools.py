@@ -4,8 +4,7 @@ NO_ACTIONS_NEEDED_NODE_RESPONSE: str = "complete"
 
 
 def build_select_nodes_tool(registry: "NodeRegistry") -> ToolDefinition:  # noqa: F821
-    node_names = registry.get_names()
-    node_names.add(NO_ACTIONS_NEEDED_NODE_RESPONSE)
+    node_names = sorted(registry.get_names()) + [NO_ACTIONS_NEEDED_NODE_RESPONSE]
 
     return ToolDefinition(
         type="function",

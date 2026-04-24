@@ -2,9 +2,14 @@
 
 import logging
 import sys
+import tempfile
+import threading
+import time
 from pathlib import Path
 
 import click
+import msgpack
+import zmq
 
 from .config.settings import Settings
 from .orchestrator import Orchestrator
@@ -189,6 +194,95 @@ def local(
         settings.rag_enabled = rag_enabled
 
     _run_server(settings, log_level)
+
+
+_TEST_INPUT_ENDPOINT = "tcp://127.0.0.1:15555"
+_TEST_OUTPUT_ENDPOINT = "tcp://127.0.0.1:15556"
+_TEST_BIND_INPUT = "tcp://*:15555"
+_TEST_RESPONSE_TIMEOUT_MS = 90_000
+
+
+@cli.command("test-run")
+@click.option(
+    "--message", "-m",
+    default="Hey, how are you doing today?",
+    help="Message to send through the pipeline",
+)
+@click.option(
+    "--log-level",
+    type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"], case_sensitive=False),
+    default="INFO",
+    help="Logging level",
+)
+def test_run(message: str, log_level: str) -> None:
+    """Send a single message through the full pipeline and print the response.
+
+    Runs the orchestrator in-process with ephemeral in-memory storage,
+    sends the message over ZMQ, waits for the response, then exits.
+    No data is persisted — Qdrant is in-memory, SQLite uses a temp file.
+    """
+    setup_logging(getattr(logging, log_level.upper()))
+    logger = logging.getLogger(__name__)
+
+    # Build settings with ephemeral storage and test-only ZMQ ports
+    settings = Settings()
+    settings.qdrant.url = None
+    settings.qdrant.path = None   # triggers in-memory QdrantClient(":memory:")
+
+    tmp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    tmp_db.close()
+    settings.conversation_store.db_path = tmp_db.name
+
+    # Patch ZMQHandler's class-level settings before the singleton is created
+    from .communication.zmq_handler import ZMQHandler
+    ZMQHandler._settings.zmq_input_endpoint = _TEST_BIND_INPUT
+    ZMQHandler._settings.zmq_output_endpoint = _TEST_OUTPUT_ENDPOINT
+
+    # Bind the output receiver BEFORE the orchestrator starts so the
+    # orchestrator DEALER can connect to it immediately on startup
+    ctx = zmq.Context()
+    output_socket = ctx.socket(zmq.ROUTER)
+    output_socket.bind(_TEST_OUTPUT_ENDPOINT)
+
+    orchestrator = Orchestrator(settings=settings)
+    orch_thread = threading.Thread(target=orchestrator.run, daemon=True)
+    orch_thread.start()
+
+    # Give the ROUTER socket time to bind
+    time.sleep(0.5)
+
+    # Connect sender DEALER to orchestrator input
+    sender = ctx.socket(zmq.DEALER)
+    sender.connect(_TEST_INPUT_ENDPOINT)
+
+    payload = msgpack.packb({"content": message, "speaker": "test_user"}, use_bin_type=True)
+    sender.send_multipart([b"dialogue", payload])
+    click.echo(f"\n→ Sent: {message!r}\n")
+
+    # Drain the ACK that the orchestrator sends back via ROUTER
+    ack_poller = zmq.Poller()
+    ack_poller.register(sender, zmq.POLLIN)
+    if dict(ack_poller.poll(3000)).get(sender):
+        ack = sender.recv_multipart()
+        logger.debug("ACK received: %s", ack)
+
+    # Wait for the response forwarded to the output socket
+    out_poller = zmq.Poller()
+    out_poller.register(output_socket, zmq.POLLIN)
+    ready = dict(out_poller.poll(_TEST_RESPONSE_TIMEOUT_MS))
+
+    if ready.get(output_socket):
+        frames = output_socket.recv_multipart()
+        # ROUTER receives [identity, ..., message] — response is the last frame
+        response = frames[-1].decode("utf-8")
+        click.echo(f"← Response:\n{response}\n")
+    else:
+        click.echo("✗ No response received within timeout.", err=True)
+
+    orchestrator.stop()
+    sender.close()
+    output_socket.close()
+    ctx.term()
 
 
 def _run_server(settings: Settings, log_level: str | None) -> None:

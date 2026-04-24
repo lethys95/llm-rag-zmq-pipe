@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import time
+from datetime import datetime, timezone
 
 from src.communication.zmq_handler import ZMQHandler
 from src.config.settings import Settings
@@ -13,6 +14,8 @@ from src.handlers.memory_evaluation import MemoryEvaluationHandler
 from src.handlers.needs_analysis import NeedsAnalysisHandler
 from src.handlers.response_strategy import ResponseStrategyHandler
 from src.handlers.memory_advisor import MemoryAdvisorHandler
+from src.handlers.needs_advisor import NeedsAdvisorHandler
+from src.handlers.strategy_advisor import StrategyAdvisorHandler
 from src.rag.algorithms.memory_chrono_decay import MemoryDecayAlgorithm
 from src.llm.openrouter import OpenRouterLLM
 from src.models.sentiment import DialogueInput
@@ -117,6 +120,10 @@ class Orchestrator:
             max_retries=s.sentiment.max_retries,
             retry_delay=s.sentiment.retry_delay,
         )
+        needs_advisor_handler = NeedsAdvisorHandler()
+        strategy_advisor_handler = StrategyAdvisorHandler()
+
+        self._conversation_store = conversation_store
 
         registry = NodeRegistry.build(
             zmq_handler=self._zmq,
@@ -130,6 +137,8 @@ class Orchestrator:
             needs_analysis_handler=needs_analysis_handler,
             response_strategy_handler=response_strategy_handler,
             memory_advisor_handler=memory_advisor_handler,
+            needs_advisor_handler=needs_advisor_handler,
+            strategy_advisor_handler=strategy_advisor_handler,
         )
 
         coordinator = Coordinator(
@@ -180,12 +189,29 @@ class Orchestrator:
     # ------------------------------------------------------------------
     # Per-request handling
 
+    def _get_idle_time_minutes(self) -> float | None:
+        """Calculate minutes elapsed since the last stored conversation turn."""
+        try:
+            messages = self._conversation_store.get_recent_for_context(limit=1)
+            if not messages:
+                return None
+            last_ts = messages[-1].timestamp
+            last_dt = datetime.fromisoformat(last_ts)
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=timezone.utc)
+            now = datetime.now(timezone.utc)
+            return (now - last_dt).total_seconds() / 60.0
+        except Exception:
+            logger.debug("Could not calculate idle time", exc_info=True)
+            return None
+
     async def _handle_request(
         self, identity: list[bytes], dialogue_input: DialogueInput
     ) -> None:
         broker = KnowledgeBroker(
             dialogue_input=dialogue_input,
             zmq_identity=identity,
+            idle_time_minutes=self._get_idle_time_minutes(),
         )
 
         logger.info("Request from '%s': %.80s", dialogue_input.speaker, dialogue_input.content)

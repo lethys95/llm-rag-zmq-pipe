@@ -1,8 +1,8 @@
-# Session Handoff — 2026-04-23
+# Session Handoff — 2026-04-24
 
 ## Current state
 
-128 passing tests. Codebase is clean. The main processing chain exists end-to-end but has not been run against real LLMs yet — the right machine isn't available.
+169 passing tests. Codebase is clean. The advisory layer is complete — memory, needs, and strategy advisors all exist. The main processing chain exists end-to-end but has not been run against real LLMs yet — the right machine isn't available.
 
 Read these docs before touching anything:
 - `docs/ADVISOR_PATTERN_CONCEPT.md` — critical architecture, read first
@@ -11,15 +11,31 @@ Read these docs before touching anything:
 
 ---
 
-## Architectural decisions settled in this session
+## What was built this session (2026-04-24)
+
+**NeedsAdvisorHandler / NeedsAdvisorNode** — translates `NeedsAnalysis.context_summary` into an `AdvisorOutput`. No LLM call; `context_summary` is already natural language. Potency = `need_urgency`.
+
+**StrategyAdvisorHandler / StrategyAdvisorNode** — wraps `ResponseStrategy.system_prompt_addition` as an `AdvisorOutput`. No LLM call. Potency has a floor of 0.4, scales up with urgency.
+
+**PrimaryResponseHandler** updated — when the needs advisor ran, raw Maslow score dump is suppressed. When strategy advisor ran, `system_prompt_addition` is no longer appended to the system prompt. Falls back to old behaviour when advisors haven't run.
+
+---
+
+## Architectural decisions settled (previous session + this session)
 
 ### The companion is a friend, not a therapist
 
 The psychology and therapy tools are a toolbox that activates proportionally to criticality — not a mode the companion operates in. Most interactions are casual friendship. The machinery is always present but mostly dormant. A cat picture and a grief disclosure both pass through the same system, just at completely different activation levels.
 
-The criticality dial: from "send something light and connective" to "full advisory chain, this person needs careful support." Same system, different activation. The coordinator assesses criticality and decides how much of the pipeline to run. Knowing when NOT to deploy complexity is itself a form of intelligence. "Hi. What's up?" can be the correct output of a full advisory chain.
+The criticality dial: from "send something light and connective" to "full advisory chain, this person needs careful support." Same system, different activation. Knowing when NOT to deploy complexity is itself a form of intelligence. "Hi. What's up?" can be the correct output of a full advisory chain.
 
 The tools are invisible to the user. They experience a friend who somehow always knows the right register. They don't see the machinery.
+
+### The "safety/crisis" response is a gradient, not a flip switch
+
+Current AI chatbots have a boolean: detect distress → drop all warmth → spit out a hotline number. This has the opposite of the intended effect. If the companion becomes cold and clinical when the user is most vulnerable, the user learns not to be honest. Sterile environments produce sterile people, or people who seek comfort elsewhere.
+
+The "crisis node" is the high end of the criticality dial, not a separate mode. The companion stays a friend through the entire spectrum. Escalation means: more presence, slower pace, more direct — not less warmth. The character never disappears. Only the intensity changes.
 
 ### The event model — continuous stream, not sessions
 
@@ -87,13 +103,7 @@ Hard-defined strategy logic (rules derived from MI, CBT, etc.) + soft RAG'd guid
 
 ## What needs building — priority order
 
-### 1. Fix coordinator blindness (highest priority, lowest effort)
-
-The coordinator currently sees: user message + nodes already run. It cannot see what those nodes produced. It's making routing decisions without knowing if emotional state was detected, if memories were retrieved, what urgency level was found.
-
-Fix: inject `broker.get_state_summary()` into the coordinator prompt at each decision point. This method already exists on the broker. One prompt change. Coordinator immediately starts making informed routing decisions.
-
-### 2. Design the observation/character_state layer
+### 1. Design the observation/character_state layer
 
 `RelationshipObservation` as a stored object in character_state Qdrant collection:
 - Natural language observation
@@ -102,21 +112,7 @@ Fix: inject `broker.get_state_summary()` into the coordinator prompt at each dec
 
 Design the reflection process that reads accumulated observations and synthesises calibration notes.
 
-### 3. Build the memory advisor (first real advisor)
-
-Reads retrieved memories + MemoryEvaluation reasoning + current event context.
-Produces: natural language synthesis of what the companion knows about this person that's relevant right now + potency score.
-
-This is the most important advisor. Character with a specific user is almost entirely built from memories.
-
-### 4. Design AdvisorOutput and broker field
-
-Settle the unsettled parts of the advisor pattern:
-- `AdvisorOutput` dataclass: advisor name, advice (natural language), potency (0.0-1.0)
-- `broker.advisor_outputs: list[AdvisorOutput]`
-- How the primary LLM system prompt explains potency
-
-### 5. Strategy transition logic informed by MI
+### 2. Strategy transition logic informed by MI
 
 The strategy roster needs transition logic, not just selection logic:
 - Failure signatures per strategy (what withdrawal/resistance looks like)
@@ -124,23 +120,23 @@ The strategy roster needs transition logic, not just selection logic:
 - Resistance → roll back to reflective listening (hardcoded rule from MI)
 - Premature problem-solving detection (righting reflex guard)
 
-### 6. Criticality/urgency routing in the coordinator
+### 3. Criticality/urgency routing in the coordinator
 
 The coordinator should assess event criticality early and route the pipeline accordingly. A cat picture shares very little of the same path as a crisis disclosure. Low criticality → skip most of the chain, go to primary response. High criticality → full chain.
 
-### 7. Parallel Coordinator (after advisor pattern stabilises)
+### 4. Parallel Coordinator (after advisor pattern stabilises)
 
 Multi-node selection per coordinator call. Independent nodes run concurrently via asyncio.gather.
 
-### 8. Safety/crisis node
+### 5. Crisis node (high-criticality friend response)
 
-Runs before everything else at high criticality. Not a script, not a hotline link — friend response. Slow down, acknowledge, ask directly.
+Runs when coordinator assesses high urgency. Not a script, not a hotline link — friend response. Slow down, acknowledge, ask directly. The companion stays a friend. This is the high end of the criticality dial, not a mode switch.
 
-### 9. Background reflection / detox process
+### 6. Background reflection / detox process
 
 Scheduled internal event. Reads accumulated observations since last run. Detects OCEAN drift. Synthesises calibration notes. Stores in character_state.
 
-### 10. External event sources
+### 7. External event sources
 
 Infrastructure for injecting non-user events (news feeds, Reddit, scheduled check-ins) into the event stream. The companion having a world beyond the user's messages.
 
@@ -158,4 +154,14 @@ Infrastructure for injecting non-user events (news feeds, Reddit, scheduled chec
 
 ## Working components
 
-See memory file for full list. Everything in `tests/` passes (128 tests).
+See tests/ — everything passes (169 tests).
+
+Coordinator-selectable nodes (@register_node, live in registry):
+- MessageAnalysisNode, MemoryRetrievalNode, MemoryEvaluationNode — analysis
+- NeedsAnalysisNode, ResponseStrategyNode — classifiers
+- MemoryAdvisorNode, NeedsAdvisorNode, StrategyAdvisorNode — advisors
+- PrimaryResponseNode — generation
+
+Infrastructure (orchestrator owns directly, never coordinator-selectable):
+- ConversationStorage — background persistence after response sent
+- ZMQ send/receive — inline in orchestrator and ZMQHandler

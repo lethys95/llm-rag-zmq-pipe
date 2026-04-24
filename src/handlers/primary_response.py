@@ -139,20 +139,22 @@ class PrimaryResponseHandler:
             if emotion_parts:
                 parts.append("\n".join(emotion_parts))
 
-        # Add needs analysis
+        # Add needs analysis only when no needs advisor has translated it to natural language
         if "needs_analysis" in analyzed_context:
-            needs = analyzed_context["needs_analysis"]
-            need_parts = []
-            if needs.primary_needs:
-                need_parts.append(f"Primary needs: {', '.join(needs.primary_needs)}")
-            if needs.unmet_needs:
-                need_parts.append(f"Unmet: {', '.join(needs.unmet_needs)}")
-            if needs.need_urgency > 0.6:
-                need_parts.append(f"Urgency: {needs.need_urgency:.2f}")
-            if needs.context_summary:
-                need_parts.append(needs.context_summary)
-            if need_parts:
-                parts.append("\n".join(need_parts))
+            advisor_names = {o.advisor for o in (analyzed_context.get("advisor_outputs") or [])}
+            if "needs" not in advisor_names:
+                needs = analyzed_context["needs_analysis"]
+                need_parts = []
+                if needs.primary_needs:
+                    need_parts.append(f"Primary needs: {', '.join(needs.primary_needs)}")
+                if needs.unmet_needs:
+                    need_parts.append(f"Unmet: {', '.join(needs.unmet_needs)}")
+                if needs.need_urgency > 0.6:
+                    need_parts.append(f"Urgency: {needs.need_urgency:.2f}")
+                if needs.context_summary:
+                    need_parts.append(needs.context_summary)
+                if need_parts:
+                    parts.append("\n".join(need_parts))
 
         # Add retrieved memories
         if "user_facts" in analyzed_context:
@@ -332,9 +334,12 @@ class PrimaryResponseHandler:
         default_with_context = self.SYSTEM_PROMPT_WITH_CONTEXT
         default_without_context = self.SYSTEM_PROMPT_WITHOUT_CONTEXT
 
+        # Append strategy_addition only when the strategy advisor hasn't handled it
         strategy_addition = ""
         if analyzed_context and "response_strategy" in analyzed_context:
-            strategy_addition = "\n\n" + analyzed_context["response_strategy"].system_prompt_addition
+            advisor_names = {o.advisor for o in (analyzed_context.get("advisor_outputs") or [])}
+            if "strategy" not in advisor_names:
+                strategy_addition = "\n\n" + analyzed_context["response_strategy"].system_prompt_addition
 
         advisor_guidance = ""
         if analyzed_context and "advisor_outputs" in analyzed_context:

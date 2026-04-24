@@ -235,18 +235,16 @@ class QdrantRAG(BaseRAG):
             Exception: If retrieval fails
         """
         try:
-            # Search Qdrant
-            results = self.client.search(
+            response = self.client.query_points(
                 collection_name=self.collection_name,
-                query_vector=query_embedding,
+                query=query_embedding,
                 limit=limit,
                 score_threshold=score_threshold,
                 query_filter=filter_conditions,
             )
 
-            # Convert to RAGDocument objects
             documents = []
-            for result in results:
+            for result in response.points:
                 # Extract text from payload
                 text = result.payload.get("text", "")
 

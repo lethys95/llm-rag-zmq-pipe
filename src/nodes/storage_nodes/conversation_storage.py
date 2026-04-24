@@ -47,7 +47,7 @@ class ConversationStorage(BaseNode):
         try:
             dialogue_input = broker.dialogue_input
             response = broker.primary_response
-            emotional_state = broker.emotional_state
+            emotional_state = None  # broker field suspended — see knowledge_broker.py
             timestamp = datetime.now().isoformat()
 
             self.conversation_store.add_message(
