@@ -141,6 +141,70 @@ The coordinator should understand these dependencies, not have them hardcoded. T
 
 ---
 
+## Criticality and Proportional Activation
+
+The companion is a friend first. Most interactions are casual — a cat picture, a quick check-in, a light observation. The psychology machinery exists for when it is needed, not as a constant overhead applied to every message.
+
+The criticality dial runs from "send something light and connective" to "full advisory chain, this person needs careful support." The same system handles both ends. Knowing when NOT to deploy complexity is itself a form of intelligence. "Hi. What's up?" can be the correct output of a full advisory chain.
+
+The coordinator is responsible for reading the turn and activating accordingly. After `NeedsAnalysisNode` returns urgency=0.05 with no primary needs, the coordinator should skip ResponseStrategyNode, MemoryEvaluationNode, and the advisor chain — not because they are disabled, but because they add nothing. The node descriptions and `min_criticality` field on each node communicate when they are warranted.
+
+---
+
+## Crisis Response Is a Gradient, Not a Mode Switch
+
+Current AI chatbots implement a binary: detect distress → drop warmth → output a hotline link. This has the opposite of the intended effect. When the companion becomes cold and clinical at the moment the user is most vulnerable, the user learns not to be honest with it.
+
+There is no "crisis mode." There is a single continuous dial. At the high end, the companion responds with more presence, slower pace, more directness — but the character never disappears. The friend doesn't become a pamphlet. Warmth is not a feature that gets suspended when things get serious. Only intensity changes.
+
+The crisis node (not yet built) is the high end of that dial, not a separate mode.
+
+---
+
+## The Event Model and Session Continuity
+
+### session_id Is Removed
+
+`session_id` was removed from the data model. The concept does not hold. The companion's relationship with the user is a single continuous stream from first interaction onward. There is no meaningful session boundary.
+
+The concept breaks entirely once external event sources exist — a Reddit post arriving at 3am has no session to belong to. A companion-initiated check-in has no session. Idle-time reflection has no session.
+
+What `session_id` was trying to do, and what replaced it:
+- **Group turns for reflection** → replaced by timestamp comparison ("events since last reflection ran")
+- **Within-conversation continuity** → replaced by recency weighting and elapsed time since last interaction
+- **Strategy inertia** → handled by observations in character_state (not yet built)
+
+### Elapsed Time Since Last Interaction Is a First-Class Signal
+
+Two hours vs three days vs a week carry meaningfully different implications for re-engagement. The companion approaching a user who went quiet for a week is a different situation from continuing a conversation from an hour ago. This is a continuous variable injected into the broker as `idle_time_minutes`, not a binary "new session" flag.
+
+---
+
+## Observations as Language, Not Counters
+
+Session state is a collection of natural language observations written by advisors and classifiers. There are no `deflection_count` fields, no `turns_on_current_strategy` counters, no numeric tallies of social dynamics.
+
+Rigid counters are the wrong abstraction. "User deflected when companion raised social connection — three short responses then topic change" is more useful to a language model than `deflection_count: 2`. The context that makes an observation meaningful is exactly what a counter throws away.
+
+### Capturing vs Interpreting
+
+During interactions, advisors only **capture observations** — they write what they noticed in plain language. They do not interpret. The interpretation — what it means, what worked, what didn't — happens during the background reflection run (detox), not in the moment.
+
+This mirrors how a therapist observes during a session and reflects in supervision afterwards. Attempting to interpret in real time produces premature conclusions on insufficient data. Let the interaction happen. Let observations accumulate. Interpret from a distance.
+
+Observations are stored in the `character_state` Qdrant collection with:
+- Provenance: which advisor, timestamp, event context
+- Content: natural language
+- No `session_id` — just timestamp
+
+### Effectiveness Knowledge Emerges from Reflection
+
+"What worked, what didn't" is **not** recorded at interaction time. It is inferred by the reflection process reading accumulated observations across multiple interactions and noticing patterns. "On three occasions across multiple interactions, cognitive reframing of self-criticism has been met with withdrawal. This user appears to need a longer validation phase." This becomes a calibration note with high `chrono_relevance`, retrieved at future interaction start.
+
+Recording effectiveness inline produces noise. The signal only becomes visible across time.
+
+---
+
 ## Session State (Not Yet Implemented)
 
 The coordinator currently has no concept of session continuity. Each turn it starts with a fresh broker and no memory of what happened in previous turns of the same conversation.

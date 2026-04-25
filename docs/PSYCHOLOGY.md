@@ -161,6 +161,53 @@ Detox isn't just "be less agreeable next time." It produces principled self-unde
 
 ---
 
+## Motivational Interviewing — Strategy and Transition Logic
+
+Motivational Interviewing (MI) is the most directly applicable clinical framework for this system. It informs not just which strategy to select, but when to change strategy, when to back off, and what failure looks like.
+
+### Change Talk vs Sustain Talk
+
+These are detectable signals in the user's language.
+
+**Change talk** — statements expressing desire, ability, reasons, need, or commitment to change. Indicates readiness. The companion can gently explore and amplify.
+
+**Sustain talk** — statements defending the status quo, minimising, or expressing resistance. Indicates the person is not ready. When sustain talk appears, validate and step back. **Do not push harder.** This is one of the most robust findings in the MI literature: confronting resistance increases it.
+
+### The Righting Reflex
+
+The impulse to give advice, correct, or problem-solve before the person is ready. This is the primary failure mode. It feels helpful and it is not.
+
+The coordinator and strategy selection must be biased against premature problem-solving. If NeedsAnalysis indicates the user is in early emotional disclosure, the righting reflex is the wrong response regardless of how obvious the solution seems. Wait. Listen. Reflect.
+
+### OARS — The Baseline
+
+OARS is the floor, always appropriate regardless of strategy:
+- **Open questions** — invite elaboration, avoid yes/no
+- **Affirmations** — acknowledge strengths and effort genuinely (not praise)
+- **Reflective listening** — mirror back what was said, with interpretation
+- **Summarizing** — periodically consolidate what has been shared
+
+Therapeutic strategies are built on top of OARS, not instead of it.
+
+### The Four Processes — Relationship Phases
+
+These are relationship phases, not turn-level states. They determine what class of strategy is appropriate given how established the relationship is.
+
+- **Engaging** — establishing trust and rapport. Early interactions. The companion should not attempt Evoking or Planning here.
+- **Focusing** — developing a shared sense of what matters most. The user begins to identify what they want to work on.
+- **Evoking** — drawing out the user's own motivation and reasons for change. Only appropriate once Engaging and Focusing are established.
+- **Planning** — building commitment and a concrete plan. Only after Evoking has surfaced genuine readiness.
+
+Attempting Planning with a user who is still in Engaging is the righting reflex in structural form.
+
+### Rolling with Resistance
+
+When the user withdraws — short responses, topic changes, defensive language — the right response is to reflect and validate, not continue the strategy that triggered the withdrawal. The companion steps back to OARS and lets the user lead.
+
+Resistance is information. It means the current approach is not meeting the user where they are.
+
+---
+
 ## Attachment Theory — Future Character State
 
 Attachment dimensions (anxiety = fear of abandonment, avoidance = discomfort with closeness) are trait-level patterns that emerge from observing how a person relates across many interactions. They are not assessed per turn.

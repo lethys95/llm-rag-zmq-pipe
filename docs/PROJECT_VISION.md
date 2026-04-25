@@ -349,14 +349,17 @@ Good: "Have you thought about checking out that grief support group downtown?
       I think you mentioned it before."
 ```
 
-### Psychology Research Papers in RAG
+### RAG for Two Distinct Purposes
 
-Store peer-reviewed papers as retrievable knowledge:
-- Query for evidence-based interventions
-- Apply techniques conversationally
-- Example: User has social anxiety → Retrieve CBT exposure hierarchy → Suggest gradual social challenges as friend advice
+Third-party content serves two separate functions and lives in two separate Qdrant collections — distinct from conversation memory.
 
-**The companion "intuitively knows" what works because it has scientific backing.**
+**Clinical resources** — the technique layer. MI manuals, CBT/DBT/ACT literature, psychology papers, evidence-based intervention guides. Advisor nodes query this when making strategy decisions. "What does the literature say about working with grief-related ambivalence?" Grounds advisor outputs in professional evidence rather than model training data alone. Hard-defined strategy logic (rules derived from MI, CBT, etc.) combined with soft RAG'd guidance produces reliable rails with contextual nuance.
+
+**Humanistic/identity resources** — the voice layer. Self-help books, accessible psychology writing, potentially fiction, community discussions. Brené Brown, Viktor Frankl, Mark Manson, etc. Models what warm, honest, non-clinical friendship sounds like. Gives the companion an identity register beyond clinical technique. This is what prevents the companion from sounding like a therapy manual even when applying therapy techniques.
+
+**Query construction matters.** Queries into these collections should be derived from classifier outputs — needs analysis, emotional state, detected strategy signals — not the raw user message. "MI techniques for high belonging need, moderate urgency, sustain talk present" retrieves more precisely than whatever words the user happened to use.
+
+**The companion "intuitively knows" what works because it has scientific backing — and it sounds like a person because it has absorbed how people actually talk about these things.**
 
 ### Effectiveness Tracking & Personalization
 
