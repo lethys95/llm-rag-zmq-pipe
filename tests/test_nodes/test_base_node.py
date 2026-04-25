@@ -36,10 +36,6 @@ def test_name_defaults_to_snake_case_class_name():
     assert node.name == "__unnamed"
 
 
-def test_should_run_returns_true_by_default(broker):
-    assert _UnnamedNode().should_run(broker) is True
-
-
 def test_get_description_defaults_to_name():
     node = _NamedNode()
     assert node.get_description() == node.name

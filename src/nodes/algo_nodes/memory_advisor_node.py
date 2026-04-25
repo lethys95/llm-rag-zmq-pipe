@@ -1,3 +1,5 @@
+import asyncio
+
 from src.handlers.memory_advisor import MemoryAdvisorHandler
 from src.models.analysis import MemoryEvaluation
 from src.nodes.core.base_node import BaseNode
@@ -8,6 +10,8 @@ from src.nodes.orchestration.node_registry_decorator import register_node
 
 @register_node
 class MemoryAdvisorNode(BaseNode):
+    dependencies: list[str] = ["MemoryRetrievalNode", "MemoryEvaluationNode"]
+    min_criticality: float = 0.2
 
     def __init__(self, memory_advisor_handler: MemoryAdvisorHandler) -> None:
         super().__init__()
@@ -15,9 +19,17 @@ class MemoryAdvisorNode(BaseNode):
 
     def get_description(self) -> str:
         return (
-            "Synthesise retrieved and evaluated memories into natural language guidance "
-            "for the primary LLM. Run after MemoryEvaluationNode. Produces an AdvisorOutput "
-            "with advice and potency — the primary LLM never sees raw memory documents."
+            "Synthesises memory documents into natural language guidance for the primary LLM and "
+            "appends an AdvisorOutput to broker.advisor_outputs. "
+            "The primary LLM never sees raw Qdrant documents — only this advisor's synthesis. "
+            "The advice may include: things the user has shared previously, patterns the companion "
+            "has observed over time, emotional episodes from prior turns that are relevant now, "
+            "preferences and facts extracted from earlier messages, and any unresolved threads "
+            "worth acknowledging. Potency reflects how many meaningful memories were found "
+            "(0.0=none retrieved, 1.0=rich relevant history). "
+            "Prefers broker.evaluated_memories (post-LLM ranking); falls back to broker.retrieved_documents "
+            "with stub evaluations if MemoryEvaluationNode did not run. "
+            "Skip only if both retrieved_documents and evaluated_memories are empty."
         )
 
     async def execute(self, broker: KnowledgeBroker) -> NodeResult:
@@ -36,7 +48,8 @@ class MemoryAdvisorNode(BaseNode):
                 for doc in broker.retrieved_documents
             ]
 
-        output = self.handler.advise(
+        output = await asyncio.to_thread(
+            self.handler.advise,
             message=broker.dialogue_input.content,
             evaluated_memories=evaluated,
         )

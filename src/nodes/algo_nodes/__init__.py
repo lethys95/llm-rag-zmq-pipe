@@ -9,6 +9,7 @@ from src.nodes.algo_nodes.response_strategy_node import ResponseStrategyNode
 from src.nodes.algo_nodes.memory_advisor_node import MemoryAdvisorNode
 from src.nodes.algo_nodes.needs_advisor_node import NeedsAdvisorNode
 from src.nodes.algo_nodes.strategy_advisor_node import StrategyAdvisorNode
+from src.nodes.algo_nodes.format_advisor_node import FormatAdvisorNode
 
 __all__ = [
     "EmotionalStateNode",
@@ -20,4 +21,5 @@ __all__ = [
     "MemoryAdvisorNode",
     "NeedsAdvisorNode",
     "StrategyAdvisorNode",
+    "FormatAdvisorNode",
 ]

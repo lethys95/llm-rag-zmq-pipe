@@ -34,11 +34,14 @@ class MemoryEvaluationHandler:
         Be honest. If a memory is not relevant, say so with a low score and a brief reason.
         The reasoning will be read by the companion to understand the user — keep it direct and human.
 
-        Respond ONLY with a JSON array, one entry per memory, in the same order as provided:
-        [
-          {"index": 0, "relevance": 0.0, "chrono_relevance": 0.0, "reasoning": "..."},
-          ...
-        ]
+        Respond ONLY with a JSON object containing an "evaluations" key whose value is an array,
+        one entry per memory, in the same order as provided:
+        {
+          "evaluations": [
+            {"index": 0, "relevance": 0.0, "chrono_relevance": 0.0, "reasoning": "..."},
+            ...
+          ]
+        }
 
         Return ONLY valid JSON. No explanation, no extra text.""")
 
@@ -93,7 +96,7 @@ class MemoryEvaluationHandler:
             f"Current message:\n{message}\n\n"
             f"Emotional state:\n{self._format_emotional_state(emotional_state)}\n\n"
             f"Memories to evaluate:\n{self._format_documents(documents)}\n\n"
-            f"JSON array:"
+            f"JSON:"
         )
 
     def _format_emotional_state(self, state: EmotionalState | None) -> str:
@@ -125,10 +128,11 @@ class MemoryEvaluationHandler:
     ) -> list[tuple[RAGDocument, MemoryEvaluation]] | None:
         try:
             text = raw.strip()
-            start, end = text.find("["), text.rfind("]")
+            start, end = text.find("{"), text.rfind("}")
             if start == -1 or end == -1:
-                raise json.JSONDecodeError("No JSON array found", text, 0)
-            items = json.loads(text[start:end + 1])
+                raise json.JSONDecodeError("No JSON object found", text, 0)
+            data = json.loads(text[start:end + 1])
+            items = data["evaluations"]
 
             results = []
             for item in items:

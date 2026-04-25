@@ -12,7 +12,7 @@ def make_doc(content: str) -> RAGDocument:
 
 
 def make_response(*entries) -> str:
-    return json.dumps(list(entries))
+    return json.dumps({"evaluations": list(entries)})
 
 
 DOCS = [

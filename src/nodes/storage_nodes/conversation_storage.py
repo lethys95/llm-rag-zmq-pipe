@@ -1,7 +1,10 @@
 """Conversation persistence — stores each turn to SQLite and Qdrant."""
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 from src.nodes.core.base_node import BaseNode
 from src.nodes.core.result import NodeResult, NodeStatus
@@ -15,7 +18,7 @@ from src.models.emotional_state import EmotionalState
 @dataclass
 class ConversationMetadata:
     timestamp: str
-    speaker: str
+    memory_owner: str
     valence: float | None = None
     arousal: float | None = None
     dominance: float | None = None
@@ -67,6 +70,26 @@ class ConversationStorage(BaseNode):
                 metadata=metadata_obj.__dict__,
             )
 
+            for fact in broker.user_facts:
+                try:
+                    fact_embedding = self.embedding_service.encode(fact.claim)
+                    self.rag_provider.store(
+                        text=fact.claim,
+                        embedding=fact_embedding,
+                        metadata={
+                            "timestamp": timestamp,
+                            "memory_owner": fact.memory_owner,
+                            "claim": fact.claim,
+                            "valence": fact.valence,
+                            "arousal": fact.arousal,
+                            "dominance": fact.dominance,
+                            "chrono_relevance": fact.chrono_relevance,
+                            "subject": fact.subject,
+                        },
+                    )
+                except Exception:
+                    logger.exception("Failed to store fact: %s", fact.claim)
+
             return NodeResult(status=NodeStatus.SUCCESS, metadata={"stored": True})
         except Exception as e:
             return NodeResult(status=NodeStatus.FAILED, error=str(e))
@@ -77,10 +100,10 @@ class ConversationStorage(BaseNode):
         if emotional_state:
             return ConversationMetadata(
                 timestamp=timestamp,
-                speaker=speaker,
+                memory_owner=speaker,
                 valence=emotional_state.valence,
                 arousal=emotional_state.arousal,
                 dominance=emotional_state.dominance,
                 emotional_summary=emotional_state.summary,
             )
-        return ConversationMetadata(timestamp=timestamp, speaker=speaker)
+        return ConversationMetadata(timestamp=timestamp, memory_owner=speaker)

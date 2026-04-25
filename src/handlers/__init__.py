@@ -7,7 +7,7 @@ from .needs_analysis import NeedsAnalysisHandler
 from .response_strategy import ResponseStrategyHandler
 from .memory_advisor import MemoryAdvisorHandler
 from .primary_response import PrimaryResponseHandler
-from .context_interpreter import ContextInterpreterHandler
+from .format_advisor import FormatAdvisorHandler
 
 __all__ = [
     "EmotionalStateHandler",
@@ -17,5 +17,5 @@ __all__ = [
     "ResponseStrategyHandler",
     "MemoryAdvisorHandler",
     "PrimaryResponseHandler",
-    "ContextInterpreterHandler",
+    "FormatAdvisorHandler",
 ]

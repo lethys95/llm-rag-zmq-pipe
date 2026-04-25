@@ -12,21 +12,25 @@ from textwrap import dedent
 
 @dataclass
 class LLMConfig:
-    """Configuration for an LLM provider."""
+    """Configuration for an LLM provider.
+
+    `model` is the remote model identifier (e.g. OpenRouter model ID).
+    `model_path` is the local model file path, used when provider is 'llama'.
+    The openrouter_provider_* fields control routing within OpenRouter (e.g. to Cerebras).
+    """
 
     provider: str
     model_path: str | None
-    openrouter_model: str
+    model: str
     openrouter_provider: str | None
     openrouter_provider_sort: str
     openrouter_provider_allow_fallbacks: bool
-    worker_llm: str = "openai/gpt-oss-120b"
 
 
 DEFAULT_WORKER_LLM_PROFILE = LLMConfig(
     provider="openrouter",
     model_path=None,
-    openrouter_model="openai/gpt-oss-120b",
+    model="openai/gpt-oss-120b",
     openrouter_provider="Cerebras",
     openrouter_provider_sort="throughput",
     openrouter_provider_allow_fallbacks=True,
@@ -122,15 +126,11 @@ class Settings:
     primary_llm: LLMConfig = field(
         default_factory=lambda: replace(
             DEFAULT_WORKER_LLM_PROFILE,
-            openrouter_model="z-ai/glm-4.7",
+            model="z-ai/glm-4.7",
         )
     )
 
-    sentiment_llm: LLMConfig = field(default_factory=lambda: DEFAULT_WORKER_LLM_PROFILE)
-
-    interpreter_llm: LLMConfig = field(
-        default_factory=lambda: DEFAULT_WORKER_LLM_PROFILE
-    )
+    worker_llm: LLMConfig = field(default_factory=lambda: DEFAULT_WORKER_LLM_PROFILE)
 
     n_ctx: int = 80000
     n_threads: int = 4
@@ -140,6 +140,7 @@ class Settings:
     top_p: float = 0.95
     top_k: int = 40
 
+    rag_enabled: bool = True
     rag_type: str = "qdrant"
     rag_embedding_model = "all-MiniLM-L6-v2"
     openrouter_api_key: str = os.environ.get("OPENROUTER_API_KEY", "")
@@ -206,7 +207,6 @@ class Settings:
     )
 
     enable_sentiment_analysis: bool = True
-    enable_context_interpreter: bool = True
 
     log_level = logging.INFO
 
@@ -214,8 +214,7 @@ class Settings:
         """Validate LLM configurations."""
         for name, llm_config in [
             ("primary", self.primary_llm),
-            ("sentiment", self.sentiment_llm),
-            ("interpreter", self.interpreter_llm),
+            ("worker", self.worker_llm),
         ]:
             if llm_config.provider not in ["llama", "llama_local", "openrouter"]:
                 raise ValueError(

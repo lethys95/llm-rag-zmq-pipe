@@ -7,7 +7,7 @@ from textwrap import dedent
 from typing import Any
 
 from src.config.settings import settings
-from src.llm.base import BaseLLM
+from src.llm.base import BaseLLM, LLMResponse, ToolDefinition
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +92,14 @@ class LlamaLocalLLM(BaseLLM):
         logger.debug("Generated response: %.100s...", generated_text)
 
         return generated_text
+
+    def generate_with_tools(
+        self,
+        prompt: str,
+        tools: list[ToolDefinition],
+        tool_choice: dict[str, Any] | str | None = None,
+    ) -> LLMResponse:
+        raise NotImplementedError("LlamaLocalLLM does not support tool calling")
 
     def close(self) -> None:
         logger.info("Closing local LLM provider")

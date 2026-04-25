@@ -9,18 +9,30 @@ def build_select_nodes_tool(registry: "NodeRegistry") -> ToolDefinition:  # noqa
     return ToolDefinition(
         type="function",
         function=FunctionDefinition(
-            name="select_node",
-            description="Select the next processing node to execute, or indicate completion",
+            name="select_nodes",
+            description=(
+                "Select one or more processing nodes to execute in parallel, or indicate completion. "
+                "Nodes listed together must be genuinely independent — they must not read broker fields "
+                "that another node in the same batch writes. Use 'complete' alone when no more work "
+                "is needed this turn."
+            ),
             parameters=FunctionParameters(
                 type="object",
                 properties={
-                    "node_name": {
-                        "type": "string",
-                        "enum": node_names,
-                        "description": "Name of the node to execute next, or 'complete' if no more work needed",
+                    "node_names": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": node_names,
+                        },
+                        "description": (
+                            "List of node names to execute in parallel, or ['complete'] if finished. "
+                            "Only group nodes that have no data dependency on each other within this batch."
+                        ),
+                        "minItems": 1,
                     }
                 },
-                required=["node_name"],
+                required=["node_names"],
             ),
         ),
     )

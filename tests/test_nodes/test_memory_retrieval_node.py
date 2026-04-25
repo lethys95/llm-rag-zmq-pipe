@@ -44,10 +44,10 @@ async def test_handler_called_with_correct_args(node, handler, broker):
 
 
 @pytest.mark.asyncio
-async def test_empty_result_still_succeeds(node, handler, broker):
+async def test_empty_result_returns_partial(node, handler, broker):
     handler.retrieve.return_value = []
     result = await node.execute(broker)
-    assert result.status == NodeStatus.SUCCESS
+    assert result.status == NodeStatus.PARTIAL
     assert broker.retrieved_documents == []
 
 

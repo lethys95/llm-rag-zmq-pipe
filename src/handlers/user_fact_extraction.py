@@ -1,14 +1,11 @@
 import json
 import logging
 import time
-from datetime import datetime
 from textwrap import dedent
 
 from pydantic import ValidationError
 
 from src.llm.base import BaseLLM
-from src.rag.base import BaseRAG
-from src.rag.embeddings import EmbeddingService
 from src.models.emotional_state import EmotionalState
 from src.models.user_fact import UserFact
 
@@ -55,14 +52,10 @@ class UserFactExtractionHandler:
     def __init__(
         self,
         llm_provider: BaseLLM,
-        rag_provider: BaseRAG,
-        embedding_service: EmbeddingService | None = None,
         max_retries: int = 3,
         retry_delay: float = 0.5,
     ) -> None:
         self.llm = llm_provider
-        self.rag = rag_provider
-        self.embedding_service = embedding_service or EmbeddingService.get_instance()
         self.max_retries = max_retries
         self.retry_delay = retry_delay
 
@@ -80,8 +73,6 @@ class UserFactExtractionHandler:
                 facts = self._parse(raw, speaker, emotional_state)
                 if facts is not None:
                     logger.debug("Extracted %d facts from message", len(facts))
-                    if facts:
-                        self._store(facts)
                     return facts
             except Exception:
                 logger.exception("UserFactExtractionHandler attempt %d/%d failed", attempt, self.max_retries)
@@ -118,24 +109,3 @@ class UserFactExtractionHandler:
             logger.error("UserFactExtractionHandler parse error: %s", e)
             return None
 
-    def _store(self, facts: list[UserFact]) -> None:
-        timestamp = datetime.now().isoformat()
-        for fact in facts:
-            try:
-                embedding = self.embedding_service.encode(fact.claim)
-                self.rag.store(
-                    text=fact.claim,
-                    embedding=embedding,
-                    metadata={
-                        "timestamp": timestamp,
-                        "memory_owner": fact.memory_owner,
-                        "claim": fact.claim,
-                        "valence": fact.valence,
-                        "arousal": fact.arousal,
-                        "dominance": fact.dominance,
-                        "chrono_relevance": fact.chrono_relevance,
-                        "subject": fact.subject,
-                    },
-                )
-            except Exception:
-                logger.exception("Failed to store fact: %s", fact.claim)

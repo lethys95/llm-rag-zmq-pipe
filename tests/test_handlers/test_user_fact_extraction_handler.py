@@ -28,20 +28,9 @@ def mock_llm():
 
 
 @pytest.fixture
-def mock_rag():
-    m = MagicMock()
-    m.store.return_value = "point-id"
-    return m
-
-
-@pytest.fixture
-def handler(mock_llm, mock_rag):
-    embedding_service = MagicMock()
-    embedding_service.encode.return_value = [0.1] * 384
+def handler(mock_llm):
     return UserFactExtractionHandler(
         llm_provider=mock_llm,
-        rag_provider=mock_rag,
-        embedding_service=embedding_service,
         max_retries=3,
         retry_delay=0.0,
     )
@@ -102,18 +91,6 @@ def test_missing_required_fields_returns_empty_list(handler, mock_llm):
     mock_llm.generate.return_value = bad
     result = handler.extract("message", speaker="user")
     assert result == []
-
-
-def test_rag_store_called_once_per_fact(handler, mock_llm, mock_rag):
-    mock_llm.generate.return_value = VALID_RESPONSE
-    handler.extract("message", speaker="user")
-    assert mock_rag.store.call_count == 2
-
-
-def test_rag_store_not_called_for_empty_result(handler, mock_llm, mock_rag):
-    mock_llm.generate.return_value = EMPTY_RESPONSE
-    handler.extract("message", speaker="user")
-    mock_rag.store.assert_not_called()
 
 
 def test_retries_on_failure_then_succeeds(handler, mock_llm):

@@ -12,7 +12,7 @@ import msgpack
 import zmq
 
 from .config.settings import Settings
-from .orchestrator import Orchestrator
+from .nodes.orchestration.orchestrator import Orchestrator
 from .utils.logger import setup_logging
 
 
@@ -87,7 +87,7 @@ def remote(
     if output_endpoint is not None:
         settings.zmq_output_endpoint = output_endpoint
     if openrouter_model is not None:
-        settings.primary_llm.openrouter_model = openrouter_model
+        settings.primary_llm.model = openrouter_model
     if temperature is not None:
         settings.temperature = temperature
     if max_tokens is not None:
@@ -237,6 +237,8 @@ def test_run(message: str, log_level: str) -> None:
     from .communication.zmq_handler import ZMQHandler
     ZMQHandler._settings.zmq_input_endpoint = _TEST_BIND_INPUT
     ZMQHandler._settings.zmq_output_endpoint = _TEST_OUTPUT_ENDPOINT
+    settings.zmq_input_endpoint = _TEST_BIND_INPUT
+    settings.zmq_output_endpoint = _TEST_OUTPUT_ENDPOINT
 
     # Bind the output receiver BEFORE the orchestrator starts so the
     # orchestrator DEALER can connect to it immediately on startup
@@ -273,7 +275,7 @@ def test_run(message: str, log_level: str) -> None:
 
     if ready.get(output_socket):
         frames = output_socket.recv_multipart()
-        # ROUTER receives [identity, ..., message] — response is the last frame
+        # ROUTER receives [identity, payload] — response is the last frame
         response = frames[-1].decode("utf-8")
         click.echo(f"← Response:\n{response}\n")
     else:

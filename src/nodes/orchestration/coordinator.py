@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from textwrap import dedent
 
 from src.llm.base import BaseLLM, LLMResponse
-from src.llm.tools import build_select_nodes_tool
+from src.llm.tools import NO_ACTIONS_NEEDED_NODE_RESPONSE, build_select_nodes_tool
 from src.nodes.orchestration.knowledge_broker import KnowledgeBroker
 from src.storage.conversation_store import ConversationStore
 
@@ -16,17 +16,17 @@ _CONVERSATION_HISTORY_LIMIT = 30
 
 @dataclass
 class Coordinator:
-    """Decides which node to run next within a single turn.
+    """Decides which nodes to run next within a single turn.
 
-    Called repeatedly by the orchestrator until it returns None.
-    Has access to the broker state (what this turn has produced so far)
-    and recent conversation history (what the relationship looks like).
+    Returns a batch of node names that can be executed in parallel, or None
+    when the turn is complete. Called repeatedly by the orchestrator until
+    it returns None.
     """
 
     _llm_provider: BaseLLM
     _conversation_store: ConversationStore | None = field(default=None)
 
-    def select_node(self, broker: KnowledgeBroker, registry: "NodeRegistry") -> str | None:  # noqa: F821
+    def select_nodes(self, broker: KnowledgeBroker, registry: "NodeRegistry") -> list[str] | None:  # noqa: F821
         available = registry.get_names()
         if not available:
             logger.warning("No nodes registered, cannot select")
@@ -36,29 +36,31 @@ class Coordinator:
         response: LLMResponse = self._llm_provider.generate_with_tools(
             prompt,
             [build_select_nodes_tool(registry)],
-            tool_choice={"type": "function", "function": {"name": "select_node"}},
+            tool_choice={"type": "function", "function": {"name": "select_nodes"}},
         )
-        node_name = self._parse_tool_call(response)
+        batch = self._parse_tool_call(response)
 
-        if node_name:
-            logger.info("Coordinator selected: %s", node_name)
+        if batch:
+            logger.info("Coordinator selected batch: %s", batch)
         else:
             logger.info("Coordinator: turn complete")
 
-        return node_name
+        return batch
 
-    def _parse_tool_call(self, response: LLMResponse) -> str | None:
+    def _parse_tool_call(self, response: LLMResponse) -> list[str] | None:
         if not response.tool_calls:
             logger.warning("No tool calls in coordinator response")
             return None
 
         try:
             tool_call = response.tool_calls[0]
-            if tool_call.function_name == "select_node":
-                node_name = tool_call.arguments.get("node_name")
-                if node_name == "complete":
+            if tool_call.function_name == "select_nodes":
+                names = tool_call.arguments.get("node_names", [])
+                if not names:
                     return None
-                return node_name
+                if names == [NO_ACTIONS_NEEDED_NODE_RESPONSE] or NO_ACTIONS_NEEDED_NODE_RESPONSE in names:
+                    return None
+                return names
             logger.warning("Unexpected tool call: %s", tool_call.function_name)
             return None
         except (KeyError, TypeError):
@@ -72,18 +74,27 @@ class Coordinator:
 
         return dedent(f"""\
             You are the coordinator for an AI companion system. Your job is to decide
-            which single processing node should run next for this event.
+            which processing nodes to run next — you may select multiple nodes to execute
+            in parallel, or a single node, or signal completion.
 
-            You are processing an event. Events are not always user messages — they can
-            be scheduled check-ins, idle-time reflections, internal state updates, or
-            proactive companion initiations. The appropriate response to an event is not
-            always a primary response to the user. Sometimes the right outcome is an
-            internal state change only. Sometimes it is a proactive message the companion
-            initiates itself. Sometimes the right choice is to do nothing.
+            PARALLELISM RULES:
+            - You may run multiple nodes in one batch if they are independent: none of them
+              reads a broker field that another in the same batch writes.
+            - Example safe parallel batch: [EmotionalStateNode, MemoryRetrievalNode] — both
+              only read dialogue_input and write to different fields.
+            - Example unsafe batch: [NeedsAnalysisNode, ResponseStrategyNode] — ResponseStrategyNode
+              reads broker.needs_analysis which NeedsAnalysisNode writes. Run them in separate rounds.
+            - Each node's "requires:" line tells you what must have been produced before that node
+              will be meaningful. Honour these when batching.
 
-            Use the event content, conversation history, and what has been produced so
-            far to decide what — if anything — should happen next. "complete" means this
-            event has been handled appropriately, not necessarily that a response was sent.
+            EVENT HANDLING:
+            Events are not always user messages — they can be scheduled check-ins, idle-time
+            reflections, internal state updates, or proactive companion initiations. The appropriate
+            response to an event is not always a primary response to the user. Sometimes the right
+            outcome is an internal state change only. Sometimes the right choice is to do nothing.
+
+            Use 'complete' (alone) when: a response was sent, an internal update was made,
+            or deliberate inaction was the correct choice.
 
             {self._format_conversation_history()}
 
@@ -95,14 +106,10 @@ class Coordinator:
 
             Nodes already run this turn: {already_run_str}
 
-            Available nodes:
+            Available nodes (with dependencies and descriptions):
             {registry.get_menu()}
 
-            Special value:
-            - "complete": this event has been handled — a response was sent, an internal
-              update was made, or inaction was the deliberate choice
-
-            Select exactly one node to run next, or "complete" if finished.
+            Select a batch of independent nodes to run next, or ['complete'] if finished.
         """)
 
     def _format_conversation_history(self) -> str:

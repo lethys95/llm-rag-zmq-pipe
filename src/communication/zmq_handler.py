@@ -87,7 +87,6 @@ class ZMQHandler:
         poller = zmq.Poller()
         poller.register(self.router_socket, zmq.POLLIN)
         poller.register(self.dealer_socket, zmq.POLLIN)
-
         return poller
 
     def get_poller(self) -> zmq.Poller:
@@ -215,7 +214,11 @@ class ZMQHandler:
         if not frames:
             return None, None
 
-        identity, topic, message_bytes = self._extract_frames(frames)
+        extracted = self._extract_frames(frames)
+        if extracted is None:
+            return None, None
+
+        identity, topic, message_bytes = extracted
         dialogue_input = self._parse_message(topic, message_bytes)
 
         return identity, dialogue_input
@@ -231,15 +234,26 @@ class ZMQHandler:
 
     def _extract_frames(
         self, frames: list[bytes]
-    ) -> tuple[list[bytes], MessageTopic, bytes]:
+    ) -> tuple[list[bytes], MessageTopic, bytes] | None:
         """Extract identity, topic, and message from ROUTER multipart frames.
 
         ROUTER frames: [identity_part1, ..., topic, message]
         First frame after identity is the topic, rest is the message.
+
+        Returns None if the frame structure is invalid or the topic is unknown.
         """
-        # Identity is all frames except the last two (topic and message)
+        if len(frames) < 2:
+            logger.warning("Received malformed ZMQ message: expected at least 2 frames, got %d", len(frames))
+            return None
+
+        try:
+            topic_str = frames[-2].decode("utf-8")
+            topic = MessageTopic(topic_str)
+        except (UnicodeDecodeError, ValueError):
+            logger.warning("Received unknown or undecodable ZMQ topic: %r", frames[-2])
+            return None
+
         identity = frames[:-2]
-        topic = MessageTopic(frames[-2].decode("utf-8"))
         message = frames[-1]
         return identity, topic, message
 
@@ -310,11 +324,7 @@ class ZMQHandler:
     def _create_dialogue_input(self, data: dict[str, object]) -> DialogueInput | None:
         """Create DialogueInput from dictionary data."""
         try:
-            # Convert dict[str, object] to dict[str, str] for DialogueInput
-            str_data: dict[str, str] = {
-                k: str(v) if v is not None else "" for k, v in data.items()
-            }
-            dialogue_input = DialogueInput(**str_data)
+            dialogue_input = DialogueInput.model_validate(data)
             logger.debug(
                 "Received message from '%s': %.100s...",
                 dialogue_input.speaker,
@@ -348,20 +358,21 @@ class ZMQHandler:
     def forward_response(self, response: str) -> bool:
         """Forward the LLM response to downstream pipeline via DEALER.
 
-        If the DEALER socket is busy, the message is queued for later.
+        If the DEALER socket is busy, the message is queued and flushed
+        immediately after — ensuring queued messages are not abandoned.
 
         Args:
             response: The generated response to forward
 
         Returns:
-            True if sent immediately, False if queued
+            True if sent immediately, False if queued then flushed
         """
-        print(response)
         response_bytes = response.encode("utf-8")
         sent_immediate = self.send_immediate(response_bytes)
 
         if not sent_immediate:
             logger.debug("Response queued for later transmission")
+            self.flush_queue()
 
         logger.debug("Forwarded response via DEALER: %.100s...", response)
         return sent_immediate

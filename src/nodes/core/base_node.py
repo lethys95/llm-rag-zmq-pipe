@@ -13,16 +13,13 @@ logger = logging.getLogger(__name__)
 class BaseNode(ABC):
     """Abstract base class for all execution nodes.
 
-    All nodes must inherit from this class and implement the execute() method.
-    Nodes can optionally override should_run() for conditional execution.
-
-    Attributes:
-        name: Unique identifier for this node
-        priority: Execution priority (0 = highest, higher numbers = lower priority)
-        dependencies: List of node names that must complete successfully before this node
-        queue_type: Either "immediate" (blocks user response) or "background" (async)
-        timeout: Optional timeout in seconds for node execution
+    Subclasses may override `dependencies` (class attribute) to declare which
+    other node names must have run before this node is meaningful. The coordinator
+    uses these as scheduling hints — they are not enforced at runtime.
     """
+
+    dependencies: list[str] = []
+    min_criticality: float = 0.0  # 0.0 = always run; scale reflects need_urgency threshold
 
     def __init__(self, name: str | None = None, timeout: float | None = None):
         self.name = name or self._make_simple_name()
@@ -46,20 +43,6 @@ class BaseNode(ABC):
             NodeResult with status, data, and optional next nodes to enqueue
         """
         pass
-
-    def should_run(self, broker: KnowledgeBroker) -> bool:
-        """Determine if this node should run based on current context.
-
-        Override this method to implement conditional execution logic.
-        Default implementation always returns True.
-
-        Args:
-            broker: Knowledge broker to check conditions against
-
-        Returns:
-            True if node should execute, False to skip
-        """
-        return True
 
     def _make_simple_name(self) -> str:
         """

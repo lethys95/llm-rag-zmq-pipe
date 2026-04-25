@@ -88,7 +88,7 @@ class OpenRouterLLM(BaseLLM):
         }
 
         payload = GenerationPayload(
-            model=self._config.openrouter_model,
+            model=self._config.model,
             messages=[GenerationMessage(role="user", content=prompt)],
             temperature=settings.temperature,
             max_tokens=settings.max_tokens,
@@ -137,7 +137,7 @@ class OpenRouterLLM(BaseLLM):
         }
 
         payload = GenerationPayload(
-            model=self._config.openrouter_model,
+            model=self._config.model,
             messages=[GenerationMessage(role="user", content=prompt)],
             temperature=settings.temperature,
             max_tokens=settings.max_tokens,
@@ -205,8 +205,13 @@ class OpenRouterLLM(BaseLLM):
         """
         try:
             logger.debug("Full API response: %s", response)
-            content = response["choices"][0]["message"]["content"]
+            message = response["choices"][0]["message"]
+            content = message.get("content")
             finish_reason = response["choices"][0].get("finish_reason")
+
+            if content is None:
+                logger.error("API returned null content (finish_reason=%s): %s", finish_reason, response)
+                raise ValueError("API returned null content")
 
             logger.debug("Extracted content length: %d", len(content))
             logger.debug("Finish reason: %s", finish_reason)

@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 import time
 from datetime import datetime, timezone
 
@@ -17,7 +18,9 @@ from src.handlers.emotional_state import EmotionalStateHandler
 from src.handlers.memory_advisor import MemoryAdvisorHandler
 from src.handlers.needs_advisor import NeedsAdvisorHandler
 from src.handlers.strategy_advisor import StrategyAdvisorHandler
+from src.handlers.format_advisor import FormatAdvisorHandler
 from src.rag.algorithms.memory_chrono_decay import MemoryDecayAlgorithm
+from src.llm.base import BaseLLM
 from src.llm.openrouter import OpenRouterLLM
 from src.models.sentiment import DialogueInput
 from src.nodes.core.result import NodeStatus
@@ -41,6 +44,27 @@ logger = logging.getLogger(__name__)
 _MAX_NODES_PER_REQUEST = 20
 _FALLBACK_RESPONSE = "I'm here, but something went wrong on my end. Give me a moment."
 
+_EMOJI_RE = re.compile(
+    "["
+    "\U0001F600-\U0001F64F"  # emoticons
+    "\U0001F300-\U0001F5FF"  # symbols & pictographs
+    "\U0001F680-\U0001F6FF"  # transport & map
+    "\U0001F700-\U0001F77F"  # alchemical
+    "\U0001F780-\U0001F7FF"  # geometric
+    "\U0001F800-\U0001F8FF"  # supplemental arrows
+    "\U0001F900-\U0001F9FF"  # supplemental symbols
+    "\U0001FA00-\U0001FA6F"  # chess symbols
+    "\U0001FA70-\U0001FAFF"  # symbols & pictographs extended
+    "\U00002702-\U000027B0"  # dingbats
+    "\U000024C2-\U0001F251"  # enclosed characters
+    "]+",
+    flags=re.UNICODE,
+)
+
+
+def _strip_emojis(text: str) -> str:
+    return _EMOJI_RE.sub("", text).strip()
+
 
 class Orchestrator:
     """Wires together all components and runs the request-handling loop.
@@ -58,11 +82,18 @@ class Orchestrator:
         self._zmq = ZMQHandler()
         self._registry, self._coordinator = self._build()
 
+    @staticmethod
+    def _build_primary_llm(s: Settings) -> BaseLLM:
+        if s.primary_llm.provider in ("llama", "llama_local"):
+            from src.llm.llama_local import LlamaLocalLLM  # pylint: disable=import-outside-toplevel
+            return LlamaLocalLLM()
+        return OpenRouterLLM(config=s.primary_llm)
+
     def _build(self) -> tuple[NodeRegistry, Coordinator]:
         s = self.settings
 
-        worker_llm = OpenRouterLLM(config=s.sentiment_llm)   # fast: gpt-oss-120b via Cerebras
-        primary_llm = OpenRouterLLM(config=s.primary_llm)    # frontier: glm-4.7 via Cerebras
+        worker_llm = OpenRouterLLM(config=s.worker_llm)   # fast: gpt-oss-120b via Cerebras
+        primary_llm: BaseLLM = self._build_primary_llm(s)
         rag = QdrantRAG(
             collection_name=s.qdrant.collection_name,
             embedding_dim=s.qdrant.embedding_dim,
@@ -79,13 +110,9 @@ class Orchestrator:
 
         primary_response_handler = PrimaryResponseHandler(
             llm_provider=primary_llm,
-            rag_provider=rag,
-            conversation_store=conversation_store,
         )
         user_fact_extraction_handler = UserFactExtractionHandler(
             llm_provider=worker_llm,
-            rag_provider=rag,
-            embedding_service=embedding_service,
             max_retries=s.sentiment.max_retries,
             retry_delay=s.sentiment.retry_delay,
         )
@@ -128,6 +155,7 @@ class Orchestrator:
         )
         needs_advisor_handler = NeedsAdvisorHandler()
         strategy_advisor_handler = StrategyAdvisorHandler()
+        format_advisor_handler = FormatAdvisorHandler()
 
         self._conversation_store = conversation_store
 
@@ -146,6 +174,7 @@ class Orchestrator:
             emotional_state_handler=emotional_state_handler,
             needs_advisor_handler=needs_advisor_handler,
             strategy_advisor_handler=strategy_advisor_handler,
+            format_advisor_handler=format_advisor_handler,
         )
 
         coordinator = Coordinator(
@@ -185,9 +214,13 @@ class Orchestrator:
     async def _main_loop(self) -> None:
         logger.info("Listening on %s", self.settings.zmq_input_endpoint)
         while self._running:
-            identity, dialogue_input = await asyncio.to_thread(
-                self._zmq.receive_request, 1000
-            )
+            try:
+                identity, dialogue_input = await asyncio.to_thread(
+                    self._zmq.receive_request, 1000
+                )
+            except Exception:
+                logger.exception("Unexpected error in ZMQ receive — continuing")
+                continue
             if identity is None or dialogue_input is None:
                 continue
             # Fire and move on — don't block the receive loop on processing
@@ -226,49 +259,87 @@ class Orchestrator:
         # ACK immediately — the caller shouldn't wait for processing to complete
         self._zmq.send_acknowledgment(identity, "processing", "Request received")
 
+        turn_start = time.monotonic()
         try:
             await self._run_node_loop(broker)
         except Exception:
             logger.exception("Unhandled error in node loop for '%s'", dialogue_input.speaker)
+        turn_ms = (time.monotonic() - turn_start) * 1000
 
         # Guarantee response delivery regardless of what happened in the loop
         response = broker.primary_response or _FALLBACK_RESPONSE
         if not broker.primary_response:
             logger.error("No primary response generated — sending fallback")
+
+        mode = broker.dialogue_input.mode if broker.dialogue_input else "spoken"
+        if mode == "spoken":
+            response = _strip_emojis(response)
+
         self._zmq.forward_response(response)
 
         # Storage is not in the latency path
         asyncio.create_task(self._store(broker))
 
         summary = broker.get_execution_summary()
+        durations = broker.metadata.durations
+        timing_str = "  ".join(
+            f"{n}={durations[n]*1000:.0f}ms" for n in summary["execution_order"] if n in durations
+        )
         logger.info(
-            "Request complete — %d nodes, order: %s",
+            "Request complete — %d nodes, %.0fms total | %s",
             summary["total_nodes_executed"],
-            summary["execution_order"],
+            turn_ms,
+            timing_str or "(no timings)",
         )
 
     async def _run_node_loop(self, broker: KnowledgeBroker) -> None:
+        nodes_run = 0
+        round_num = 0
         for _ in range(_MAX_NODES_PER_REQUEST):
-            node_name = self._coordinator.select_node(broker, self._registry)
-            if node_name is None:
+            coord_start = time.monotonic()
+            batch = await asyncio.to_thread(
+                self._coordinator.select_nodes, broker, self._registry
+            )
+            coord_ms = (time.monotonic() - coord_start) * 1000
+            logger.debug("[coordinator] round %d selection: %.0fms", round_num, coord_ms)
+
+            if batch is None:
                 break
 
-            start = time.monotonic()
-            result = await self._registry.execute(node_name, broker)
-            duration = time.monotonic() - start
+            round_num += 1
+            batch_start = time.monotonic()
+            results = await asyncio.gather(
+                *(self._registry.execute(name, broker) for name in batch),
+                return_exceptions=True,
+            )
+            batch_ms = (time.monotonic() - batch_start) * 1000
 
-            if result is None:
-                logger.error("Node '%s' not found", node_name)
+            node_timings = []
+            for name, result in zip(batch, results):
+                if isinstance(result, Exception):
+                    logger.error("Node '%s' raised exception: %s", name, result)
+                    broker.record_node_execution(name, NodeStatus.FAILED.value, None)
+                    node_timings.append(f"{name}=ERR")
+                    continue
+                if result is None:
+                    logger.error("Node '%s' not found in registry", name)
+                    node_timings.append(f"{name}=MISSING")
+                    continue
+                node_ms = result.metadata.get("duration_ms") if result.metadata else None
+                broker.record_node_execution(name, result.status.value, node_ms / 1000 if node_ms else None)
+                node_timings.append(f"{name}={result.status.value}")
+                if result.status == NodeStatus.FAILED:
+                    logger.error("Node '%s' failed: %s — continuing", name, result.error)
+
+            logger.debug(
+                "[batch %d] %.0fms total | %s",
+                round_num, batch_ms, "  ".join(node_timings),
+            )
+
+            nodes_run += len(batch)
+            if nodes_run >= _MAX_NODES_PER_REQUEST:
+                logger.warning("Hit node limit (%d) without completing", _MAX_NODES_PER_REQUEST)
                 break
-
-            broker.record_node_execution(node_name, result.status.value, duration)
-            logger.debug("Node '%s' → %s (%.3fs)", node_name, result.status.value, duration)
-
-            if result.status == NodeStatus.FAILED:
-                logger.error("Node '%s' failed: %s", node_name, result.error)
-                break
-        else:
-            logger.warning("Hit node limit (%d) without completing", _MAX_NODES_PER_REQUEST)
 
     async def _store(self, broker: KnowledgeBroker) -> None:
         if not broker.dialogue_input or not broker.primary_response:
