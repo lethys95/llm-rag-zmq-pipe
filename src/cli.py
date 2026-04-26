@@ -11,9 +11,14 @@ import click
 import msgpack
 import zmq
 
-from .config.settings import Settings
-from .nodes.orchestration.orchestrator import Orchestrator
+from .bootstrap import build_orchestrator
+from .config.settings import LocalLLMConfig, OpenRouterConfig, Settings
 from .utils.logger import setup_logging
+
+_TEST_INPUT_ENDPOINT = "tcp://127.0.0.1:15555"
+_TEST_OUTPUT_ENDPOINT = "tcp://127.0.0.1:15556"
+_TEST_BIND_INPUT = "tcp://*:15555"
+_TEST_RESPONSE_TIMEOUT_MS = 90_000
 
 
 @click.group()
@@ -80,7 +85,7 @@ def remote(
         llm-rag-pipe remote --openrouter-model z-ai/glm-4.7
     """
     settings = Settings()
-    settings.primary_llm.provider = "openrouter"
+    assert isinstance(settings.primary_llm, OpenRouterConfig)
 
     if input_endpoint is not None:
         settings.zmq_input_endpoint = input_endpoint
@@ -89,11 +94,11 @@ def remote(
     if openrouter_model is not None:
         settings.primary_llm.model = openrouter_model
     if temperature is not None:
-        settings.temperature = temperature
+        settings.primary_llm.temperature = temperature
     if max_tokens is not None:
-        settings.max_tokens = max_tokens
+        settings.primary_llm.max_tokens = max_tokens
     if top_p is not None:
-        settings.top_p = top_p
+        settings.primary_llm.top_p = top_p
     if rag_enabled is not None:
         settings.rag_enabled = rag_enabled
 
@@ -168,38 +173,35 @@ def local(
         llm-rag-pipe local --model-path model.gguf --n-gpu-layers -1
     """
     settings = Settings()
-    settings.primary_llm.provider = "llama"
+    local_config = LocalLLMConfig()
+
+    if model_path is not None:
+        local_config.model_path = str(model_path)
+    if n_ctx is not None:
+        local_config.n_ctx = n_ctx
+    if n_threads is not None:
+        local_config.n_threads = n_threads
+    if n_gpu_layers is not None:
+        local_config.n_gpu_layers = n_gpu_layers
+    if temperature is not None:
+        local_config.temperature = temperature
+    if max_tokens is not None:
+        local_config.max_tokens = max_tokens
+    if top_p is not None:
+        local_config.top_p = top_p
+    if top_k is not None:
+        local_config.top_k = top_k
+
+    settings.primary_llm = local_config
 
     if input_endpoint is not None:
         settings.zmq_input_endpoint = input_endpoint
     if output_endpoint is not None:
         settings.zmq_output_endpoint = output_endpoint
-    if model_path is not None:
-        settings.primary_llm.model_path = str(model_path)
-    if n_ctx is not None:
-        settings.n_ctx = n_ctx
-    if n_threads is not None:
-        settings.n_threads = n_threads
-    if n_gpu_layers is not None:
-        settings.n_gpu_layers = n_gpu_layers
-    if temperature is not None:
-        settings.temperature = temperature
-    if max_tokens is not None:
-        settings.max_tokens = max_tokens
-    if top_p is not None:
-        settings.top_p = top_p
-    if top_k is not None:
-        settings.top_k = top_k
     if rag_enabled is not None:
         settings.rag_enabled = rag_enabled
 
     _run_server(settings, log_level)
-
-
-_TEST_INPUT_ENDPOINT = "tcp://127.0.0.1:15555"
-_TEST_OUTPUT_ENDPOINT = "tcp://127.0.0.1:15556"
-_TEST_BIND_INPUT = "tcp://*:15555"
-_TEST_RESPONSE_TIMEOUT_MS = 90_000
 
 
 @cli.command("test-run")
@@ -233,10 +235,6 @@ def test_run(message: str, log_level: str) -> None:
     tmp_db.close()
     settings.conversation_store.db_path = tmp_db.name
 
-    # Patch ZMQHandler's class-level settings before the singleton is created
-    from .communication.zmq_handler import ZMQHandler
-    ZMQHandler._settings.zmq_input_endpoint = _TEST_BIND_INPUT
-    ZMQHandler._settings.zmq_output_endpoint = _TEST_OUTPUT_ENDPOINT
     settings.zmq_input_endpoint = _TEST_BIND_INPUT
     settings.zmq_output_endpoint = _TEST_OUTPUT_ENDPOINT
 
@@ -246,7 +244,7 @@ def test_run(message: str, log_level: str) -> None:
     output_socket = ctx.socket(zmq.ROUTER)
     output_socket.bind(_TEST_OUTPUT_ENDPOINT)
 
-    orchestrator = Orchestrator(settings=settings)
+    orchestrator = build_orchestrator(settings)
     orch_thread = threading.Thread(target=orchestrator.run, daemon=True)
     orch_thread.start()
 
@@ -297,7 +295,7 @@ def _run_server(settings: Settings, log_level: str | None) -> None:
         else:
             setup_logging(settings.log_level)
 
-        orchestrator = Orchestrator(settings=settings)
+        orchestrator = build_orchestrator(settings)
         orchestrator.run()
 
     except ValueError as e:
@@ -310,7 +308,7 @@ def _run_server(settings: Settings, log_level: str | None) -> None:
 
     except ImportError as e:
         click.echo(f"Import error: {e}", err=True)
-        if settings.primary_llm.provider in ["llama", "llama_local"]:
+        if isinstance(settings.primary_llm, LocalLLMConfig):
             click.echo(
                 "\nHint: If you're trying to use the 'llama' provider,", err=True
             )

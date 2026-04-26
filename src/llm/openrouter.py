@@ -7,7 +7,7 @@ from typing import Any
 
 import requests
 
-from src.config.settings import settings, LLMConfig
+from src.config.settings import OpenRouterConfig
 from src.llm.base import BaseLLM, ToolCall, ToolDefinition, LLMResponse
 
 logger = logging.getLogger(__name__)
@@ -32,6 +32,7 @@ class GenerationPayload:
     messages: list[GenerationMessage]
     temperature: float
     max_tokens: int
+    top_p: float
     tools: list[dict[str, Any]] | None = None
     tool_choice: dict[str, Any] | str | None = None
     provider: ProviderConfig | None = None
@@ -43,6 +44,7 @@ class GenerationPayload:
             "messages": [{"role": m.role, "content": m.content} for m in self.messages],
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
+            "top_p": self.top_p,
         }
         if self.tools is not None:
             result["tools"] = self.tools
@@ -63,9 +65,9 @@ class OpenRouterLLM(BaseLLM):
     Generation parameters (temperature, max_tokens) are read from the settings singleton.
     """
 
-    API_URL = "https://openrouter.ai/api/v1/chat/completions"
+    _REQUEST_TIMEOUT_SECONDS = 60
 
-    def __init__(self, config: LLMConfig) -> None:
+    def __init__(self, config: OpenRouterConfig) -> None:
         self._config = config
 
     def generate(self, prompt: str, json_mode: bool = False) -> str:
@@ -83,15 +85,16 @@ class OpenRouterLLM(BaseLLM):
         logger.debug("Generating response for prompt: %s...", prompt[:100])
 
         headers = {
-            "Authorization": f"Bearer {settings.openrouter_api_key}",
+            "Authorization": f"Bearer {self._config.api_key}",
             "Content-Type": "application/json",
         }
 
         payload = GenerationPayload(
             model=self._config.model,
             messages=[GenerationMessage(role="user", content=prompt)],
-            temperature=settings.temperature,
-            max_tokens=settings.max_tokens,
+            temperature=self._config.temperature,
+            max_tokens=self._config.max_tokens,
+            top_p=self._config.top_p,
             response_format={"type": "json_object"} if json_mode else None,
         )
 
@@ -132,15 +135,16 @@ class OpenRouterLLM(BaseLLM):
         logger.debug("Generating response with tools for prompt: %s...", prompt[:100])
 
         headers = {
-            "Authorization": f"Bearer {settings.openrouter_api_key}",
+            "Authorization": f"Bearer {self._config.api_key}",
             "Content-Type": "application/json",
         }
 
         payload = GenerationPayload(
             model=self._config.model,
             messages=[GenerationMessage(role="user", content=prompt)],
-            temperature=settings.temperature,
-            max_tokens=settings.max_tokens,
+            temperature=self._config.temperature,
+            max_tokens=self._config.max_tokens,
+            top_p=self._config.top_p,
             tools=[asdict(tool) for tool in tools],
             tool_choice=tool_choice,
         )
@@ -176,10 +180,10 @@ class OpenRouterLLM(BaseLLM):
             requests.HTTPError: If request fails
         """
         response = requests.post(
-            self.API_URL,
+            self._config.api_url,
             headers=headers,
             json=payload,
-            timeout=60,
+            timeout=self._REQUEST_TIMEOUT_SECONDS,
         )
 
         # Log the error details if request fails

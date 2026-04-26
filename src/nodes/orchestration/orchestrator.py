@@ -8,36 +8,13 @@ from datetime import datetime, timezone
 
 from src.communication.zmq_handler import ZMQHandler
 from src.config.settings import Settings
-from src.handlers.primary_response import PrimaryResponseHandler
-from src.handlers.user_fact_extraction import UserFactExtractionHandler
-from src.handlers.memory_retrieval import MemoryRetrievalHandler
-from src.handlers.memory_evaluation import MemoryEvaluationHandler
-from src.handlers.needs_analysis import NeedsAnalysisHandler
-from src.handlers.response_strategy import ResponseStrategyHandler
-from src.handlers.emotional_state import EmotionalStateHandler
-from src.handlers.memory_advisor import MemoryAdvisorHandler
-from src.handlers.needs_advisor import NeedsAdvisorHandler
-from src.handlers.strategy_advisor import StrategyAdvisorHandler
-from src.handlers.format_advisor import FormatAdvisorHandler
-from src.rag.algorithms.memory_chrono_decay import MemoryDecayAlgorithm
-from src.llm.base import BaseLLM
-from src.llm.openrouter import OpenRouterLLM
 from src.models.sentiment import DialogueInput
 from src.nodes.core.result import NodeStatus
 from src.nodes.orchestration.coordinator import Coordinator
 from src.nodes.orchestration.knowledge_broker import KnowledgeBroker
 from src.nodes.orchestration.node_registry import NodeRegistry
-from src.rag.embeddings import EmbeddingService
-from src.rag.qdrant_connector import QdrantRAG
-from src.rag.selector import RAGSelector
 from src.storage.conversation_store import ConversationStore
 from src.nodes.storage_nodes.conversation_storage import ConversationStorage
-
-# Import node packages to trigger @register_node decorators
-import src.nodes.algo_nodes  # noqa: F401
-import src.nodes.communication_nodes  # noqa: F401
-import src.nodes.processing  # noqa: F401
-import src.nodes.storage_nodes  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -67,129 +44,28 @@ def _strip_emojis(text: str) -> str:
 
 
 class Orchestrator:
-    """Wires together all components and runs the request-handling loop.
+    """Runs the request-handling loop.
 
-    Startup sequence:
-        1. Build shared deps (LLM, RAG, handlers, stores)
-        2. Build NodeRegistry from all @register_node decorated classes
-        3. Listen on ZMQ ROUTER for incoming messages
-        4. Per request: run the DecisionEngine → node loop until complete
+    Receives all operational dependencies pre-built and wired. Construction
+    of the dependency graph lives in the bootstrap layer.
     """
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        zmq_handler: ZMQHandler,
+        registry: NodeRegistry,
+        coordinator: Coordinator,
+        conversation_store: ConversationStore,
+        storage: ConversationStorage,
+    ) -> None:
         self.settings = settings
         self._running = False
-        self._zmq = ZMQHandler()
-        self._registry, self._coordinator = self._build()
-
-    @staticmethod
-    def _build_primary_llm(s: Settings) -> BaseLLM:
-        if s.primary_llm.provider in ("llama", "llama_local"):
-            from src.llm.llama_local import LlamaLocalLLM  # pylint: disable=import-outside-toplevel
-            return LlamaLocalLLM()
-        return OpenRouterLLM(config=s.primary_llm)
-
-    def _build(self) -> tuple[NodeRegistry, Coordinator]:
-        s = self.settings
-
-        worker_llm = OpenRouterLLM(config=s.worker_llm)   # fast: gpt-oss-120b via Cerebras
-        primary_llm: BaseLLM = self._build_primary_llm(s)
-        rag = QdrantRAG(
-            collection_name=s.qdrant.collection_name,
-            embedding_dim=s.qdrant.embedding_dim,
-            url=s.qdrant.url,
-            api_key=s.qdrant.api_key,
-            path=s.qdrant.path,
-            selector=RAGSelector(
-                max_documents=s.memory_decay.max_documents,
-                min_score=s.memory_decay.retrieval_threshold,
-            ),
-        )
-        embedding_service = EmbeddingService.get_instance()
-        conversation_store = ConversationStore()
-
-        primary_response_handler = PrimaryResponseHandler(
-            llm_provider=primary_llm,
-        )
-        user_fact_extraction_handler = UserFactExtractionHandler(
-            llm_provider=worker_llm,
-            max_retries=s.sentiment.max_retries,
-            retry_delay=s.sentiment.retry_delay,
-        )
-        memory_decay = MemoryDecayAlgorithm(
-            memory_half_life_days=s.memory_decay.half_life_days,
-            chrono_weight=s.memory_decay.chrono_weight,
-            retrieval_threshold=s.memory_decay.retrieval_threshold,
-            prune_threshold=s.memory_decay.prune_threshold,
-            max_documents=s.memory_decay.max_documents,
-        )
-        memory_retrieval_handler = MemoryRetrievalHandler(
-            rag=rag,
-            embedding_service=embedding_service,
-            memory_decay=memory_decay,
-        )
-        memory_evaluation_handler = MemoryEvaluationHandler(
-            llm_provider=worker_llm,
-            max_retries=s.sentiment.max_retries,
-            retry_delay=s.sentiment.retry_delay,
-        )
-        needs_analysis_handler = NeedsAnalysisHandler(
-            llm_provider=worker_llm,
-            max_retries=s.sentiment.max_retries,
-            retry_delay=s.sentiment.retry_delay,
-        )
-        response_strategy_handler = ResponseStrategyHandler(
-            llm_provider=worker_llm,
-            max_retries=s.sentiment.max_retries,
-            retry_delay=s.sentiment.retry_delay,
-        )
-        memory_advisor_handler = MemoryAdvisorHandler(
-            llm_provider=worker_llm,
-            max_retries=s.sentiment.max_retries,
-            retry_delay=s.sentiment.retry_delay,
-        )
-        emotional_state_handler = EmotionalStateHandler(
-            llm_provider=worker_llm,
-            max_retries=s.sentiment.max_retries,
-            retry_delay=s.sentiment.retry_delay,
-        )
-        needs_advisor_handler = NeedsAdvisorHandler()
-        strategy_advisor_handler = StrategyAdvisorHandler()
-        format_advisor_handler = FormatAdvisorHandler()
-
+        self._zmq = zmq_handler
+        self._registry = registry
+        self._coordinator = coordinator
         self._conversation_store = conversation_store
-
-        registry = NodeRegistry.build(
-            zmq_handler=self._zmq,
-            rag=rag,
-            embedding_service=embedding_service,
-            conversation_store=conversation_store,
-            primary_response_handler=primary_response_handler,
-            user_fact_extraction_handler=user_fact_extraction_handler,
-            memory_retrieval_handler=memory_retrieval_handler,
-            memory_evaluation_handler=memory_evaluation_handler,
-            needs_analysis_handler=needs_analysis_handler,
-            response_strategy_handler=response_strategy_handler,
-            memory_advisor_handler=memory_advisor_handler,
-            emotional_state_handler=emotional_state_handler,
-            needs_advisor_handler=needs_advisor_handler,
-            strategy_advisor_handler=strategy_advisor_handler,
-            format_advisor_handler=format_advisor_handler,
-        )
-
-        coordinator = Coordinator(
-            _llm_provider=worker_llm,
-            _conversation_store=conversation_store,
-        )
-
-        self._storage = ConversationStorage(
-            conversation_store=conversation_store,
-            rag=rag,
-            embedding_service=embedding_service,
-        )
-
-        logger.info("Built registry with %d nodes", len(registry))
-        return registry, coordinator
+        self._storage = storage
 
     # ------------------------------------------------------------------
     # Public interface

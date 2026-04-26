@@ -6,7 +6,7 @@ import logging
 from textwrap import dedent
 from typing import Any
 
-from src.config.settings import settings
+from src.config.settings import LocalLLMConfig
 from src.llm.base import BaseLLM, LLMResponse, ToolDefinition
 
 logger = logging.getLogger(__name__)
@@ -15,41 +15,27 @@ logger = logging.getLogger(__name__)
 class LlamaLocalLLM(BaseLLM):
     """Local LLM provider using llama-cpp-python.
 
-    Configuration is sourced from settings.py. This class is a singleton
-    to ensure the model is never loaded more than once.
+    Instantiate once at the composition root — loading a local model is expensive
+    and should only happen once per process.
     """
 
-    _instance: LlamaLocalLLM | None = None
-    _initialized: bool = False
+    def __init__(self, config: LocalLLMConfig) -> None:
+        if not config.model_path:
+            raise ValueError("model_path is required for local LLM")
 
-    def __new__(cls) -> LlamaLocalLLM:
-        if cls._instance is None:
-            cls._instance = object.__new__(cls)
-        return cls._instance
-
-    def __init__(self) -> None:
-        if self._initialized:
-            return
-
-        if not settings.primary_llm.model_path:
-            raise ValueError("model_path is not configured in settings.primary_llm")
-
+        self._config = config
         self._model = self._load_model()
-        self._initialized = True
 
     def _load_model(self) -> Any:
-        model_path = settings.primary_llm.model_path
-        assert model_path is not None, "model_path is not configured"
-
-        logger.info("Loading model from %s", model_path)
+        logger.info("Loading model from %s", self._config.model_path)
         logger.info(
             dedent("""\
                 Configuration: n_ctx=%d, \
                 n_threads=%d, \
                 n_gpu_layers=%d"""),
-            settings.n_ctx,
-            settings.n_threads,
-            settings.n_gpu_layers,
+            self._config.n_ctx,
+            self._config.n_threads,
+            self._config.n_gpu_layers,
         )
 
         try:
@@ -63,10 +49,10 @@ class LlamaLocalLLM(BaseLLM):
 
         try:
             model = Llama(
-                model_path=model_path,
-                n_ctx=settings.n_ctx,
-                n_threads=settings.n_threads,
-                n_gpu_layers=settings.n_gpu_layers,
+                model_path=self._config.model_path,
+                n_ctx=self._config.n_ctx,
+                n_threads=self._config.n_threads,
+                n_gpu_layers=self._config.n_gpu_layers,
                 verbose=False,
             )
             logger.info("Model loaded successfully")
@@ -81,10 +67,10 @@ class LlamaLocalLLM(BaseLLM):
 
         response = self._model(
             prompt,
-            max_tokens=settings.max_tokens,
-            temperature=settings.temperature,
-            top_p=settings.top_p,
-            top_k=settings.top_k,
+            max_tokens=self._config.max_tokens,
+            temperature=self._config.temperature,
+            top_p=self._config.top_p,
+            top_k=self._config.top_k,
             echo=False,
         )
 

@@ -5,7 +5,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
 
-from src.config.settings import settings
+from src.config.settings import Settings
 from src.storage.sqlite_connection import SQLiteConnection
 
 logger = logging.getLogger(__name__)
@@ -48,20 +48,18 @@ class ConversationStore:
 
     def __init__(
         self,
+        settings: Settings,
         connection: SQLiteConnection | None = None,
-        max_messages: int | None = None,
-        context_limit: int | None = None,
     ):
         """Initialize the conversation store.
 
         Args:
+            settings: Application settings
             connection: SQLiteConnection instance (creates from settings if None)
-            max_messages: Maximum messages to keep before pruning (defaults to settings)
-            context_limit: Default messages to retrieve for context (defaults to settings)
         """
         config = settings.conversation_store
-        self.max_messages = max_messages or config.max_messages
-        self.context_limit = context_limit or config.context_limit
+        self.max_messages = config.max_messages
+        self.context_limit = config.context_limit
 
         self._connection = connection or SQLiteConnection(config.db_path)
         self._init_db()

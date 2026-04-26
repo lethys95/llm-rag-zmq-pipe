@@ -26,33 +26,31 @@ class QdrantRAG(BaseRAG):
     def __init__(
         self,
         collection_name: str,
+        embedding_service: EmbeddingService,
         embedding_dim: int = 384,
         url: str | None = None,
         api_key: str | None = None,
         path: str | None = None,
         distance: Distance = Distance.COSINE,
         selector: RAGSelector | None = None,
-        embedding_service: EmbeddingService | None = None,
     ):
         """Initialize the Qdrant RAG provider.
 
         Args:
             collection_name: Name of the Qdrant collection
+            embedding_service: EmbeddingService instance for generating embeddings
             embedding_dim: Dimension of embeddings (default: 384 for all-MiniLM-L6-v2)
             url: URL for remote Qdrant instance (e.g., "http://localhost:6333")
             api_key: API key for remote Qdrant instance
             path: Path for local Qdrant storage (mutually exclusive with url)
             distance: Distance metric (COSINE, EUCLID, DOT, etc.)
             selector: RAGSelector for filtering/ranking results (optional)
-            embedding_service: Optional EmbeddingService instance (will create singleton if None)
         """
         self.collection_name = collection_name
         self.embedding_dim = embedding_dim
         self.distance = distance
         self.selector = selector or RAGSelector(max_documents=5, min_score=0.5)
-
-        # Initialize embedding service
-        self.embedding_service = embedding_service or EmbeddingService.get_instance()
+        self.embedding_service = embedding_service
 
         # Initialize Qdrant client
         if url:

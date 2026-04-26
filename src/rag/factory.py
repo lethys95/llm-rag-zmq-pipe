@@ -4,6 +4,7 @@ import logging
 
 from src.config.settings import Settings
 from src.rag.base import BaseRAG
+from src.rag.embeddings import EmbeddingService
 from src.rag.qdrant_connector import QdrantRAG
 from src.rag.selector import RAGSelector
 
@@ -11,7 +12,10 @@ logger = logging.getLogger(__name__)
 
 
 def create_rag_provider(
-    settings: Settings, rag_type: str | None = None, **kwargs
+    settings: Settings,
+    embedding_service: EmbeddingService,
+    rag_type: str | None = None,
+    **kwargs,
 ) -> BaseRAG:
     """Create a RAG provider based on settings.
 
@@ -58,6 +62,7 @@ def create_rag_provider(
 
         return QdrantRAG(
             collection_name=collection_name,
+            embedding_service=embedding_service,
             embedding_dim=embedding_dim,
             url=url,
             api_key=api_key,

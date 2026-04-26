@@ -4,7 +4,7 @@ This module provides a singleton Settings instance that can be imported
 and used throughout the application.
 """
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 import logging
 import os
 from textwrap import dedent
@@ -12,29 +12,34 @@ from textwrap import dedent
 
 @dataclass
 class LLMConfig:
-    """Configuration for an LLM provider.
+    """Base configuration shared by all LLM providers."""
 
-    `model` is the remote model identifier (e.g. OpenRouter model ID).
-    `model_path` is the local model file path, used when provider is 'llama'.
-    The openrouter_provider_* fields control routing within OpenRouter (e.g. to Cerebras).
-    """
-
-    provider: str
-    model_path: str | None
-    model: str
-    openrouter_provider: str | None
-    openrouter_provider_sort: str
-    openrouter_provider_allow_fallbacks: bool
+    temperature: float = 0.7
+    max_tokens: int = 8000
+    top_p: float = 0.95
 
 
-DEFAULT_WORKER_LLM_PROFILE = LLMConfig(
-    provider="openrouter",
-    model_path=None,
-    model="openai/gpt-oss-120b",
-    openrouter_provider="Cerebras",
-    openrouter_provider_sort="throughput",
-    openrouter_provider_allow_fallbacks=True,
-)
+@dataclass
+class OpenRouterConfig(LLMConfig):
+    """Configuration for an OpenRouter-hosted model."""
+
+    model: str = "openai/gpt-oss-120b"
+    api_key: str = field(default_factory=lambda: os.environ.get("OPENROUTER_API_KEY", ""))
+    api_url: str = "https://openrouter.ai/api/v1/chat/completions"
+    openrouter_provider: str | None = None
+    openrouter_provider_sort: str = "throughput"
+    openrouter_provider_allow_fallbacks: bool = True
+
+
+@dataclass
+class LocalLLMConfig(LLMConfig):
+    """Configuration for a locally-hosted llama.cpp model."""
+
+    model_path: str = ""
+    n_ctx: int = 80000
+    n_threads: int = 4
+    n_gpu_layers: int = -1
+    top_k: int = 40
 
 
 @dataclass
@@ -124,27 +129,19 @@ class Settings:
     zmq_output_endpoint: str = os.environ.get("TTS_INPUT_ADDRESS", "tcp://localhost:20501")
 
     primary_llm: LLMConfig = field(
-        default_factory=lambda: replace(
-            DEFAULT_WORKER_LLM_PROFILE,
-            model="z-ai/glm-4.7",
-        )
+        default_factory=lambda: OpenRouterConfig(model="z-ai/glm-4.7")
     )
 
-    worker_llm: LLMConfig = field(default_factory=lambda: DEFAULT_WORKER_LLM_PROFILE)
-
-    n_ctx: int = 80000
-    n_threads: int = 4
-    n_gpu_layers: int = -1
-    temperature: float = 0.7
-    max_tokens: int = 8000
-    top_p: float = 0.95
-    top_k: int = 40
+    worker_llm: OpenRouterConfig = field(
+        default_factory=lambda: OpenRouterConfig(
+            model="openai/gpt-oss-120b",
+            openrouter_provider="Cerebras",
+        )
+    )
 
     rag_enabled: bool = True
     rag_type: str = "qdrant"
     rag_embedding_model = "all-MiniLM-L6-v2"
-    openrouter_api_key: str = os.environ.get("OPENROUTER_API_KEY", "")
-    openrouter_api_url: str = "https://openrouter.ai/api/v1/chat/completions"
 
     qdrant: QdrantConfig = field(
         default_factory=lambda: QdrantConfig(
@@ -212,23 +209,8 @@ class Settings:
 
     def _validate_llms(self) -> None:
         """Validate LLM configurations."""
-        for name, llm_config in [
-            ("primary", self.primary_llm),
-            ("worker", self.worker_llm),
-        ]:
-            if llm_config.provider not in ["llama", "llama_local", "openrouter"]:
-                raise ValueError(
-                    f"Invalid {name}_llm provider: {llm_config.provider}. "
-                    "Must be 'llama', 'llama_local', or 'openrouter'"
-                )
-
-            if (
-                llm_config.provider in ["llama", "llama_local"]
-                and not llm_config.model_path
-            ):
-                raise ValueError(
-                    f"{name}_llm model_path is required when using llama provider"
-                )
+        if isinstance(self.primary_llm, LocalLLMConfig) and not self.primary_llm.model_path:
+            raise ValueError("primary_llm.model_path is required when using local provider")
 
     def _validate_rag(self) -> None:
         """Validate RAG configuration."""
@@ -290,25 +272,22 @@ class Settings:
             )
 
     def _validate_generation_params(self) -> None:
-        """Validate generation parameters."""
-        if self.n_ctx <= 0:
-            raise ValueError(f"n_ctx must be positive, got {self.n_ctx}")
+        """Validate generation parameters across all LLM configs."""
+        for name, config in [("primary", self.primary_llm), ("worker", self.worker_llm)]:
+            if not 0.0 <= config.temperature <= 2.0:
+                raise ValueError(
+                    f"{name}_llm.temperature must be between 0.0 and 2.0, got {config.temperature}"
+                )
+            if config.max_tokens <= 0:
+                raise ValueError(
+                    f"{name}_llm.max_tokens must be positive, got {config.max_tokens}"
+                )
 
-        if self.n_threads <= 0:
-            raise ValueError(f"n_threads must be positive, got {self.n_threads}")
-
-        if not 0.0 <= self.temperature <= 2.0:
-            raise ValueError(
-                dedent(f"""
-                    temperature must be between 0.0 and 2.0,
-                    got {self.temperature}.""")
-            )
-
-        if self.max_tokens <= 0:
-            raise ValueError(
-                dedent(f"""
-                    max_tokens must be positive, got {self.max_tokens}.""")
-            )
+        if isinstance(self.primary_llm, LocalLLMConfig):
+            if self.primary_llm.n_ctx <= 0:
+                raise ValueError(f"primary_llm.n_ctx must be positive, got {self.primary_llm.n_ctx}")
+            if self.primary_llm.n_threads <= 0:
+                raise ValueError(f"primary_llm.n_threads must be positive, got {self.primary_llm.n_threads}")
 
     def validate(self) -> None:
         """Validate configuration settings.
@@ -323,5 +302,3 @@ class Settings:
         self._validate_generation_params()
 
 
-# Singleton instance - import this to access settings throughout the app
-settings = Settings()

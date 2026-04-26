@@ -4,7 +4,7 @@ import json
 import logging
 from collections import deque
 from enum import StrEnum
-from typing import Self, cast
+from typing import cast
 
 import msgpack  # type: ignore[import-untyped]
 import zmq
@@ -25,7 +25,7 @@ class MessageTopic(StrEnum):
 
 
 class ZMQHandler:
-    """Singleton handler for ZMQ ROUTER and DEALER sockets.
+    """Handler for ZMQ ROUTER and DEALER sockets.
 
     Manages the communication layer:
     - ROUTER socket: Receives prompts from STT clients, sends ACKs back
@@ -36,26 +36,13 @@ class ZMQHandler:
          ← [ROUTER] ← (ACKs)        ← [DEALER] ← (Error feedback)
     """
 
-    _instance: Self | None = None
-    _initialized: bool = False
-    _settings: Settings = Settings()
-
-    def __new__(cls, max_queue_size: int = 1000) -> Self:
-        """Create or return the singleton instance."""
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-
-    def __init__(self, max_queue_size: int = 1000):
-        """Initialize ZMQ handler (only once due to singleton pattern).
+    def __init__(self, settings: Settings, max_queue_size: int = 1000):
+        """Initialize ZMQ handler.
 
         Args:
+            settings: Application settings
             max_queue_size: Maximum size for outgoing message queue
         """
-        # Skip initialization if already initialized
-        if self._initialized:
-            return
-
         self.max_queue_size = max_queue_size
         self.outgoing_queue: deque[bytes] = deque(maxlen=max_queue_size)
 
@@ -63,24 +50,21 @@ class ZMQHandler:
 
         # Create ROUTER socket for receiving requests from STT
         self.router_socket = self.context.socket(zmq.ROUTER)
-        self.router_socket.bind(self._settings.zmq_input_endpoint)
-        logger.info("ROUTER socket bound to %s", self._settings.zmq_input_endpoint)
+        self.router_socket.bind(settings.zmq_input_endpoint)
+        logger.info("ROUTER socket bound to %s", settings.zmq_input_endpoint)
 
         # Create DEALER socket for bidirectional communication with downstream
         self.dealer_socket = self.context.socket(zmq.DEALER)
-        self.dealer_socket.connect(self._settings.zmq_output_endpoint)
-        logger.info("DEALER socket connected to %s", self._settings.zmq_output_endpoint)
+        self.dealer_socket.connect(settings.zmq_output_endpoint)
+        logger.info("DEALER socket connected to %s", settings.zmq_output_endpoint)
 
         self.poller = self._setup_poller()
 
-        logger.info("ZMQ sockets and poller set up successfully")
         logger.info(
             "ZMQ Handler initialized: input=%s, output=%s",
-            self._settings.zmq_input_endpoint,
-            self._settings.zmq_output_endpoint,
+            settings.zmq_input_endpoint,
+            settings.zmq_output_endpoint,
         )
-
-        self._initialized = True
 
     def _setup_poller(self) -> Poller:
         # Set up poller for non-blocking receive on both sockets
@@ -423,10 +407,6 @@ class ZMQHandler:
 
         if self.context:
             self.context.term()
-
-        # Reset singleton state so it can be recreated if needed
-        ZMQHandler._instance = None
-        ZMQHandler._initialized = False
 
         logger.info("ZMQ handler closed")
 
