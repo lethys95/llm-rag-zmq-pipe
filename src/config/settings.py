@@ -147,9 +147,9 @@ class Settings:
         default_factory=lambda: QdrantConfig(
             collection_name="llm_rag_memories",
             embedding_dim=384,
-            url=None,
-            api_key=None,
-            path=None,
+            url=os.environ.get("QDRANT_URL", None),
+            api_key=os.environ.get("QDRANT_API_KEY", None),
+            path=os.environ.get("QDRANT_PATH", None),
         )
     )
 

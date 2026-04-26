@@ -15,7 +15,7 @@ services:
       - QDRANT__SERVICE__GRPC_PORT=6334
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:6333/healthz"]
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -41,11 +41,14 @@ services:
     environment:
       # Required: OpenRouter API key
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      
-      # Optional: Override endpoints  
+
+      # Qdrant connection
+      - QDRANT_URL=http://qdrant:6333
+
+      # Optional: Override endpoints
       - LLM_RAG_PIPE_INPUT_ADDRESS=${LLM_RAG_PIPE_INPUT_ADDRESS:-tcp://*:5555}
       - LLM_RAG_PIPE_OUTPUT_ADDRESS=${LLM_RAG_PIPE_OUTPUT_ADDRESS:-tcp://*:5556}
-      
+
       # Optional: Logging and configuration
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - CONFIG_FILE=${CONFIG_FILE:-}
@@ -80,6 +83,7 @@ services:
       - sentence-transformers-cache:/home/appuser/.cache/torch/sentence_transformers
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - QDRANT_URL=http://qdrant:6333
       - LLM_RAG_PIPE_INPUT_ADDRESS=${LLM_RAG_PIPE_INPUT_ADDRESS:-tcp://*:5555}
       - LLM_RAG_PIPE_OUTPUT_ADDRESS=${LLM_RAG_PIPE_OUTPUT_ADDRESS:-tcp://*:5556}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}

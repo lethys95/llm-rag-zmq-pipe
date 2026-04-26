@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy dependency files
-COPY pyproject.toml ./
+COPY pyproject.toml README.md ./
 
 # Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
@@ -31,6 +31,9 @@ FROM nvidia/cuda:13.1.0-runtime-ubuntu22.04 AS base-gpu
 
 LABEL maintainer="LLM RAG Response Pipe"
 LABEL description="GPU-enabled variant with CUDA 13.1 support"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=UTC
 
 WORKDIR /app
 
@@ -45,15 +48,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.12 \
     python3.12-dev \
     python3.12-venv \
-    python3-pip \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && python3.12 -m ensurepip --upgrade
 
 # Set Python 3.12 as default
 RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.12 1 && \
     update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
 
 # Copy dependency files
-COPY pyproject.toml ./
+COPY pyproject.toml README.md ./
 
 # Install Python dependencies with CUDA support
 RUN python -m pip install --no-cache-dir --upgrade pip && \
@@ -90,7 +93,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD python -c "import zmq; ctx = zmq.Context(); sock = ctx.socket(zmq.REQ); sock.connect('tcp://localhost:5555'); sock.close(); ctx.term()" || exit 1
 
 # Default command
-CMD ["python", "-m", "src.cli", "remote", "--input-endpoint", "tcp://*:5555", "--output-endpoint", "tcp://localhost:5556"]
+CMD ["llm-rag-pipe", "remote", "--input-endpoint", "tcp://*:5555", "--output-endpoint", "tcp://localhost:5556"]
 
 # =============================================================================
 # Stage 4: Production GPU
@@ -123,4 +126,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD python -c "import zmq; ctx = zmq.Context(); sock = ctx.socket(zmq.REQ); sock.connect('tcp://localhost:5555'); sock.close(); ctx.term()" || exit 1
 
 # Default command
-CMD ["python", "-m", "src.cli", "remote", "--input-endpoint", "tcp://*:5555", "--output-endpoint", "tcp://localhost:5556"]
+CMD ["llm-rag-pipe", "remote", "--input-endpoint", "tcp://*:5555", "--output-endpoint", "tcp://localhost:5556"]
