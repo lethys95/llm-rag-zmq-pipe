@@ -2,6 +2,7 @@ import logging
 
 from qdrant_client.models import Filter, FieldCondition, MatchValue
 
+from src.handlers.handler_registry_decorator import register_handler
 from src.rag.base import BaseRAG
 from src.rag.embeddings import EmbeddingService
 from src.rag.algorithms.memory_chrono_decay import MemoryDecayAlgorithm
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 _QDRANT_FETCH_MULTIPLIER = 3
 
 
+@register_handler
 class MemoryRetrievalHandler:
     """Retrieves and ranks memories relevant to the current message.
 

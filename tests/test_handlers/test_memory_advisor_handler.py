@@ -30,8 +30,8 @@ def mock_llm():
 
 
 @pytest.fixture
-def handler(mock_llm):
-    return MemoryAdvisorHandler(llm_provider=mock_llm, max_retries=3, retry_delay=0.0)
+def handler(mock_llm, worker_call):
+    return MemoryAdvisorHandler(worker_llm=mock_llm, worker_call=worker_call)
 
 
 def test_returns_advisor_output(handler, mock_llm):

@@ -29,8 +29,8 @@ def mock_llm():
 
 
 @pytest.fixture
-def handler(mock_llm):
-    return ResponseStrategyHandler(llm_provider=mock_llm, max_retries=3, retry_delay=0.0)
+def handler(mock_llm, worker_call):
+    return ResponseStrategyHandler(worker_llm=mock_llm, worker_call=worker_call)
 
 
 @pytest.fixture

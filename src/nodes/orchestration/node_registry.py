@@ -12,6 +12,13 @@ from src.nodes.orchestration.node_registry_decorator import get_registered_class
 logger = logging.getLogger(__name__)
 
 
+def _inject(cls: type, deps: dict[str, object]) -> object:
+    """Construct cls by matching its __init__ parameter names against deps."""
+    sig = inspect.signature(cls.__init__)
+    kwargs = {name: deps[name] for name in sig.parameters if name != "self" and name in deps}
+    return cls(**kwargs)
+
+
 class NodeRegistry:
     """Holds ready-to-run node instances, built once at startup with deps injected.
 
@@ -31,6 +38,37 @@ class NodeRegistry:
         self._nodes: dict[str, BaseNode] = {}
 
     @classmethod
+    def autowire(cls, **primitives: object) -> "NodeRegistry":
+        """Two-phase build from primitives: construct handlers, then nodes.
+
+        Triggers @register_handler and @register_node decorators by importing
+        the relevant packages, then builds handlers by name-matching their
+        __init__ parameters against primitives, and finally builds nodes by
+        matching against handlers + primitives combined.
+        """
+        import src.handlers  # noqa: F401 — triggers @register_handler decorators
+        import src.nodes.algo_nodes  # noqa: F401
+        import src.nodes.communication_nodes  # noqa: F401
+        import src.nodes.processing  # noqa: F401
+        import src.nodes.storage_nodes  # noqa: F401
+
+        from src.handlers.handler_registry_decorator import (
+            get_registered_handler_classes,
+            handler_key,
+        )
+
+        deps: dict[str, object] = dict(primitives)
+        for handler_cls in get_registered_handler_classes():
+            try:
+                instance = _inject(handler_cls, deps)
+                deps[handler_key(handler_cls)] = instance
+                logger.debug("Built handler '%s'", handler_cls.__name__)
+            except Exception:
+                logger.exception("Failed to build handler '%s'", handler_cls.__name__)
+
+        return cls.build(**deps)
+
+    @classmethod
     def build(cls, **deps: object) -> "NodeRegistry":
         """Instantiate all registered node classes with their required deps.
 
@@ -42,7 +80,7 @@ class NodeRegistry:
         registry = cls()
         for node_cls in get_registered_classes():
             try:
-                instance = cls._instantiate(node_cls, deps)
+                instance = _inject(node_cls, deps)
                 registry._nodes[node_cls.__name__] = instance
                 logger.debug("Registered node '%s'", node_cls.__name__)
             except Exception:
@@ -52,13 +90,7 @@ class NodeRegistry:
 
     @staticmethod
     def _instantiate(node_cls: type[BaseNode], deps: dict[str, object]) -> BaseNode:
-        sig = inspect.signature(node_cls.__init__)
-        kwargs = {
-            name: deps[name]
-            for name in sig.parameters
-            if name != "self" and name in deps
-        }
-        return node_cls(**kwargs)
+        return _inject(node_cls, deps)  # type: ignore[return-value]
 
     def get(self, name: str) -> BaseNode | None:
         return self._nodes.get(name)

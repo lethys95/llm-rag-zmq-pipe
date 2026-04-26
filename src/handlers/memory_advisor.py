@@ -5,6 +5,8 @@ from textwrap import dedent
 
 from pydantic import ValidationError, BaseModel, Field
 
+from src.config.settings import WorkerCallConfig
+from src.handlers.handler_registry_decorator import register_handler
 from src.llm.base import BaseLLM
 from src.models.advisor import AdvisorOutput
 from src.models.analysis import MemoryEvaluation
@@ -18,6 +20,7 @@ class _MemoryAdvisorResponse(BaseModel):
     potency: float = Field(..., ge=0.0, le=1.0)
 
 
+@register_handler
 class MemoryAdvisorHandler:
     """Synthesises retrieved memories into natural language guidance for the primary LLM.
 
@@ -81,15 +84,10 @@ class MemoryAdvisorHandler:
 
         Return ONLY valid JSON. No explanation, no extra text.""")
 
-    def __init__(
-        self,
-        llm_provider: BaseLLM,
-        max_retries: int = 3,
-        retry_delay: float = 0.5,
-    ) -> None:
-        self.llm = llm_provider
-        self.max_retries = max_retries
-        self.retry_delay = retry_delay
+    def __init__(self, worker_llm: BaseLLM, worker_call: WorkerCallConfig) -> None:
+        self.llm = worker_llm
+        self.max_retries = worker_call.max_retries
+        self.retry_delay = worker_call.retry_delay
 
     def advise(
         self,

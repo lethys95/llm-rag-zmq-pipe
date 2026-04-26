@@ -1,5 +1,6 @@
 import logging
 
+from src.handlers.handler_registry_decorator import register_handler
 from src.models.advisor import AdvisorOutput
 from src.models.response_strategy import ResponseStrategy
 
@@ -8,6 +9,7 @@ logger = logging.getLogger(__name__)
 _POTENCY_FLOOR = 0.4
 
 
+@register_handler
 class StrategyAdvisorHandler:
     """Translates ResponseStrategy into natural language guidance for the primary LLM.
 

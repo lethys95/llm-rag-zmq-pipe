@@ -89,8 +89,8 @@ class DetoxConfig:
 
 
 @dataclass
-class SentimentAnalysisConfig:
-    """Configuration for sentiment analysis."""
+class WorkerCallConfig:
+    """Retry policy for worker LLM calls (analysis handlers, advisors)."""
 
     max_retries: int
     retry_delay: float
@@ -129,7 +129,7 @@ class Settings:
     zmq_output_endpoint: str = os.environ.get("TTS_INPUT_ADDRESS", "tcp://localhost:20501")
 
     primary_llm: LLMConfig = field(
-        default_factory=lambda: OpenRouterConfig(model="z-ai/glm-4.7")
+        default_factory=lambda: OpenRouterConfig(model="z-ai/glm-4.7", openrouter_provider="Cerebras")
     )
 
     worker_llm: OpenRouterConfig = field(
@@ -179,8 +179,8 @@ class Settings:
         )
     )
 
-    sentiment: SentimentAnalysisConfig = field(
-        default_factory=lambda: SentimentAnalysisConfig(
+    worker_call: WorkerCallConfig = field(
+        default_factory=lambda: WorkerCallConfig(
             max_retries=3,
             retry_delay=0.5,
         )

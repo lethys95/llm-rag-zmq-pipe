@@ -3,12 +3,14 @@
 import logging
 from textwrap import dedent
 
+from src.handlers.handler_registry_decorator import register_handler
 from src.llm.base import BaseLLM
 from src.nodes.orchestration.knowledge_broker import KnowledgeBroker
 
 logger = logging.getLogger(__name__)
 
 
+@register_handler
 class PrimaryResponseHandler:
     """Handler for generating primary responses using a large LLM.
 
@@ -20,8 +22,8 @@ class PrimaryResponseHandler:
 
     SYSTEM_PROMPT_WITHOUT_CONTEXT = "You are an AI companion. You're here to provide emotional support, to listen, provide guidance, etc."
 
-    def __init__(self, llm_provider: BaseLLM) -> None:
-        self.llm = llm_provider
+    def __init__(self, primary_llm: BaseLLM) -> None:
+        self.llm = primary_llm
 
     def generate_response(
         self,

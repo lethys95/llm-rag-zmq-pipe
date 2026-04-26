@@ -5,6 +5,8 @@ from textwrap import dedent
 
 from pydantic import ValidationError
 
+from src.config.settings import WorkerCallConfig
+from src.handlers.handler_registry_decorator import register_handler
 from src.llm.base import BaseLLM
 from src.models.emotional_state import EmotionalState
 from src.models.user_fact import UserFact
@@ -12,6 +14,7 @@ from src.models.user_fact import UserFact
 logger = logging.getLogger(__name__)
 
 
+@register_handler
 class UserFactExtractionHandler:
     """Extracts atomic facts about the user from a message.
 
@@ -49,15 +52,10 @@ class UserFactExtractionHandler:
         Return {"facts": []} if no facts can be extracted.
         Respond ONLY with valid JSON. No explanation, no extra text.""")
 
-    def __init__(
-        self,
-        llm_provider: BaseLLM,
-        max_retries: int = 3,
-        retry_delay: float = 0.5,
-    ) -> None:
-        self.llm = llm_provider
-        self.max_retries = max_retries
-        self.retry_delay = retry_delay
+    def __init__(self, worker_llm: BaseLLM, worker_call: WorkerCallConfig) -> None:
+        self.llm = worker_llm
+        self.max_retries = worker_call.max_retries
+        self.retry_delay = worker_call.retry_delay
 
     def extract(
         self,

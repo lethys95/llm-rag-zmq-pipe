@@ -28,12 +28,8 @@ def mock_llm():
 
 
 @pytest.fixture
-def handler(mock_llm):
-    return UserFactExtractionHandler(
-        llm_provider=mock_llm,
-        max_retries=3,
-        retry_delay=0.0,
-    )
+def handler(mock_llm, worker_call):
+    return UserFactExtractionHandler(worker_llm=mock_llm, worker_call=worker_call)
 
 
 def test_valid_response_returns_user_facts(handler, mock_llm):

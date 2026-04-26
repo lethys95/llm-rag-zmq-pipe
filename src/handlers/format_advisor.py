@@ -1,5 +1,6 @@
 import logging
 
+from src.handlers.handler_registry_decorator import register_handler
 from src.models.advisor import AdvisorOutput
 
 logger = logging.getLogger(__name__)
@@ -20,6 +21,7 @@ _TEXT_ADVICE = (
 _POTENCY = 0.65
 
 
+@register_handler
 class FormatAdvisorHandler:
     """Produces format and length guidance for the primary LLM based on delivery medium.
 

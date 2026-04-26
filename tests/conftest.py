@@ -1,6 +1,7 @@
 """Shared fixtures."""
 
 import pytest
+from src.config.settings import WorkerCallConfig
 from src.models.sentiment import DialogueInput
 from src.nodes.orchestration.knowledge_broker import KnowledgeBroker
 
@@ -13,3 +14,8 @@ def dialogue_input():
 @pytest.fixture
 def broker(dialogue_input):
     return KnowledgeBroker(dialogue_input=dialogue_input)
+
+
+@pytest.fixture
+def worker_call():
+    return WorkerCallConfig(max_retries=3, retry_delay=0.0)

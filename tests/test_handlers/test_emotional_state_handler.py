@@ -32,8 +32,8 @@ def mock_llm():
 
 
 @pytest.fixture
-def handler(mock_llm):
-    return EmotionalStateHandler(llm_provider=mock_llm, max_retries=3, retry_delay=0.0)
+def handler(mock_llm, worker_call):
+    return EmotionalStateHandler(worker_llm=mock_llm, worker_call=worker_call)
 
 
 def test_valid_response_returns_emotional_state(handler, mock_llm):

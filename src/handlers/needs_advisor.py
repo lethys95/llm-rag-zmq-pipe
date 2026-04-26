@@ -1,11 +1,13 @@
 import logging
 
+from src.handlers.handler_registry_decorator import register_handler
 from src.models.advisor import AdvisorOutput
 from src.models.analysis import NeedsAnalysis
 
 logger = logging.getLogger(__name__)
 
 
+@register_handler
 class NeedsAdvisorHandler:
     """Translates NeedsAnalysis into natural language guidance for the primary LLM.
 
