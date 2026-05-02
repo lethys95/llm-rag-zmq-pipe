@@ -151,7 +151,8 @@ class Orchestrator:
         if mode == "spoken":
             response = _strip_emojis(response)
 
-        self._zmq.forward_response(response)
+        voice_id = broker.dialogue_input.voice_id if broker.dialogue_input else None
+        self._zmq.forward_response(response, voice_id=voice_id)
 
         # Storage is not in the latency path
         asyncio.create_task(self._store(broker))

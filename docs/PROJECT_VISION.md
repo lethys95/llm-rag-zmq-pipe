@@ -236,7 +236,6 @@ Msg 1: "Presentation went great!" → Strategy: FRESH analysis → Celebratory +
     needs_focus: ["belonging", "meaning"],
     system_prompt_addition: "Focus on validation without fixing. Ask about connections.",
     maintain_consistency: True,
-    session_id: "sess_123"
 }
 ```
 
@@ -319,7 +318,6 @@ been for you lately? I remember you used to paint with your mom."
     "identified_needs": ["belonging", "meaning"],
     "need_intensities": {"belonging": 0.8, "meaning": 0.6},
     "active_strategy": "reflective_listening",
-    "session_id": "sess_123",
     "response_text": "...",
 }
 ```

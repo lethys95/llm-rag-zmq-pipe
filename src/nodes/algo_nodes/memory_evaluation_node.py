@@ -7,7 +7,8 @@ from src.nodes.orchestration.knowledge_broker import KnowledgeBroker
 from src.nodes.orchestration.node_registry_decorator import register_node
 
 
-@register_node
+# DEPRECATED — classifier-on-classifier pattern, identified as wrong in ADVISOR_PATTERN_CONCEPT.md.
+# Deregistered from NodeRegistry. MemoryAdvisorNode reads retrieved documents directly.
 class MemoryEvaluationNode(BaseNode):
     dependencies: list[str] = ["MemoryRetrievalNode"]
     min_criticality: float = 0.2

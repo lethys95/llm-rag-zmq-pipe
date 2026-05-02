@@ -126,7 +126,9 @@ class Settings:
     """Application settings with type validation."""
 
     zmq_input_endpoint: str = os.environ.get("LLM_RAG_PIPE_INPUT_ADDRESS", "tcp://*:5555")
-    zmq_output_endpoint: str = os.environ.get("TTS_INPUT_ADDRESS", "tcp://localhost:20501")
+    zmq_output_endpoint: str = os.environ.get("LLM_RAG_PIPE_OUTPUT_ADDRESS", "tcp://localhost:20501")
+
+
 
     primary_llm: LLMConfig = field(
         default_factory=lambda: OpenRouterConfig(model="z-ai/glm-4.7", openrouter_provider="Cerebras")

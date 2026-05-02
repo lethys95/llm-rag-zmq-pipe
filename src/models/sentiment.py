@@ -24,6 +24,10 @@ class DialogueInput(BaseModel):
         None,
         description="Optional override for the system prompt persona (e.g., 'You are a technical expert')",
     )
+    voice_id: str | None = Field(
+        None,
+        description="TTS voice ID to use for this response; passed through from the originating client",
+    )
 
     model_config = {
         "json_schema_extra": {

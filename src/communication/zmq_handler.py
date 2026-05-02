@@ -296,11 +296,13 @@ class ZMQHandler:
         system_prompt_override = (
             str(system_prompt) if system_prompt is not None else None
         )
+        voice_id = data.get("voice_id")
 
         dialogue_input = DialogueInput(
             content=text,
             speaker=speaker,
             system_prompt_override=system_prompt_override,
+            voice_id=str(voice_id) if voice_id is not None else None,
         )
         logger.debug("Received STT from '%s': %.100s...", speaker, text)
         return dialogue_input
@@ -339,7 +341,7 @@ class ZMQHandler:
 
         logger.debug("Sent acknowledgment: %s", status)
 
-    def forward_response(self, response: str) -> bool:
+    def forward_response(self, response: str, voice_id: str | None = None) -> bool:
         """Forward the LLM response to downstream pipeline via DEALER.
 
         If the DEALER socket is busy, the message is queued and flushed
@@ -347,11 +349,19 @@ class ZMQHandler:
 
         Args:
             response: The generated response to forward
+            voice_id: Optional TTS voice ID passed through from the originating client
 
         Returns:
             True if sent immediately, False if queued then flushed
         """
-        response_bytes = response.encode("utf-8")
+        payload: dict = {
+            "type": "synthesize",
+            "text": response,
+        }
+        if voice_id is not None:
+            payload["voice_id"] = voice_id
+
+        response_bytes = msgpack.packb(payload)
         sent_immediate = self.send_immediate(response_bytes)
 
         if not sent_immediate:
@@ -362,33 +372,47 @@ class ZMQHandler:
         return sent_immediate
 
     def check_downstream_feedback(self, timeout: int = 0) -> str | None:
-        """Check for feedback/errors from downstream via DEALER (non-blocking).
+        """Drain TTS streaming response frames from the DEALER socket.
 
-        This allows the service to be informed if downstream components
-        report incompatibility or errors with the sent data.
+        TTS sends back metadata → audio chunks → complete. We drain all available
+        frames to prevent the socket buffer filling up, and surface any error frames.
 
         Args:
-            timeout: Timeout in milliseconds for polling (0 = non-blocking)
+            timeout: Timeout in milliseconds for initial poll (0 = non-blocking)
 
         Returns:
-            Feedback message from downstream, or None if no message
+            Error message if TTS reported an error, otherwise None
         """
         try:
             socks = dict(self.poller.poll(timeout))
+            if self.dealer_socket not in socks or socks[self.dealer_socket] != zmq.POLLIN:
+                return None
 
-            if self.dealer_socket in socks and socks[self.dealer_socket] == zmq.POLLIN:
-                # DEALER receives messages directly
-                message_bytes = self.dealer_socket.recv(zmq.NOBLOCK)
-                message = message_bytes.decode("utf-8")
+            while True:
+                try:
+                    frames = self.dealer_socket.recv_multipart(zmq.NOBLOCK)
+                    msg_type = frames[0] if frames else b""
 
-                logger.warning("Received feedback from downstream: %s", message)
-                return message
+                    if msg_type == b"error":
+                        data = frames[1] if len(frames) > 1 else b""
+                        try:
+                            error_msg = msgpack.unpackb(data, raw=False).get("error", "unknown TTS error")
+                        except Exception:
+                            error_msg = data.decode("utf-8", errors="replace")
+                        logger.warning("TTS error response: %s", error_msg)
+                        return error_msg
 
-        except zmq.Again:
-            # No message available
-            pass
+                    elif msg_type == b"complete":
+                        logger.debug("TTS synthesis complete")
+                        return None
+
+                    # metadata and audio frames: drain silently
+
+                except zmq.Again:
+                    break
+
         except Exception as e:
-            logger.error("Error checking downstream feedback: %s", e, exc_info=True)
+            logger.error("Error draining downstream response: %s", e, exc_info=True)
 
         return None
 

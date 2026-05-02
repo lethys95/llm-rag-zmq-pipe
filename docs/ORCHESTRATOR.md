@@ -59,57 +59,29 @@ The coordinator can also route differently based on what has already run and wha
 
 ---
 
-## The Critical Problem: The Coordinator Is Currently Blind
+## Coordinator Visibility into Broker State — Implemented
 
-The coordinator's prompt currently contains:
+The coordinator's prompt includes three things at each decision round:
 
-```
-User message: {message}
-Nodes already executed this turn: {already_run_str}
-```
+- The original event message
+- The nodes already run this turn
+- A structured summary of everything the broker currently holds (`broker.get_state_summary()`)
 
-That is all it sees. It knows the original message and which nodes have run. It does not know what those nodes produced.
+The state summary covers: emotional state (VAD + summary), user facts extracted, retrieved and evaluated memories, needs analysis (primary needs, urgency, context summary), response strategy, advisor outputs, and whether the primary response has been generated.
 
-This means the coordinator cannot adapt based on intermediate results. If `MessageAnalysisNode` detects acute grief, the coordinator cannot see that. If `MemoryRetrievalNode` returns nothing, the coordinator cannot see that. If `NeedsAnalysisHandler` returns urgency=0.9, the coordinator cannot see that.
+This lets the coordinator reason about intermediate results — if `MemoryRetrievalNode` returned nothing, the summary says so, and the coordinator can skip `MemoryEvaluationNode`. If `NeedsAnalysisNode` returned urgency=0.9, the summary reflects that, and the coordinator can activate the full advisor chain.
 
-The coordinator is making decisions with almost no information. It is flying blind after the first step.
-
-**This is the most significant architectural gap in the current implementation.** The coordinator needs a summary of the broker's current state at each decision point — not the raw data, but enough signal to make informed routing decisions.
-
-### What the Coordinator Needs to See
-
-At minimum, after each node runs, the coordinator's prompt should include a structured summary of what is now known:
-
-```
-Current broker state:
-  dialogue_input: populated ("I feel so alone today")
-  emotional_state: grief=0.85, loneliness=0.70, valence=-0.7, dominance=0.2 [high distress]
-  user_facts: 2 facts extracted
-  retrieved_documents: 5 memories retrieved
-  needs_analysis: belonging=0.8, meaning=0.6, urgency=0.7 [elevated]
-  response_strategy: not yet run
-  advisor_outputs: none yet
-  primary_response: not yet generated
-```
-
-With this, the coordinator can reason: "Urgency is elevated and dominance is low — this person is distressed and feeling powerless. I should run the memory advisor before strategy, and I should not skip the strategy node."
-
-Without this, the coordinator is essentially pattern-matching on node names and guessing.
+`KnowledgeBroker.get_state_summary()` produces this output. `Coordinator._build_prompt()` injects it. Both are in the current codebase.
 
 ---
 
 ## How the Broker Relates to the Coordinator
 
-The `KnowledgeBroker` is the shared typed context that accumulates state across nodes. Every node reads from it and writes to it. The coordinator currently has indirect access to it (it's passed in) but only reads `metadata.execution_order` and `dialogue_input.content` from it.
+The `KnowledgeBroker` is the shared typed context that accumulates state across nodes. Every node reads from it and writes to it. The coordinator receives a distilled snapshot of it at every decision round via `broker.get_state_summary()`.
 
-The broker needs a method that produces a **coordinator-readable summary** — a concise representation of what fields are populated and with what signal strength. This is not the same as dumping the full broker contents; it's a distilled state description designed specifically for the coordinator's decision-making.
+`get_state_summary()` returns a concise multi-line string describing what each broker field holds — populated fields include their signal values (e.g. urgency score, response character count), unpopulated fields are noted as "not yet run". It is designed to be scanned quickly and contains enough signal for routing decisions without dumping raw data.
 
-This summary should be:
-- Concise enough to fit comfortably in the coordinator's context
-- Informative enough to support routing decisions
-- Structured so the coordinator can scan it quickly
-
-The broker already has `get_execution_summary()` for metadata. It needs a parallel `get_state_summary()` for content.
+`get_execution_summary()` is the parallel method for metadata — which nodes ran, which failed, timings.
 
 ---
 
@@ -219,17 +191,18 @@ Session state is not yet designed or implemented. It would need to be injected i
 
 | | Current | Intended |
 |---|---|---|
-| Coordinator input | User message + nodes already run | User message + nodes run + broker state summary + session state |
-| Coordinator decisions | Guesses at a reasonable order | Adapts based on what analysis found |
-| Skip logic | None — runs nodes regardless of upstream results | Skips nodes when inputs are absent or irrelevant |
-| Session awareness | None | Maintains within-session context |
-| Broker summary | No method exists | `get_state_summary()` for coordinator consumption |
+| Coordinator input | User message + nodes already run + broker state summary | User message + nodes run + broker state summary + session state |
+| Coordinator decisions | Adapts based on what analysis found | Same, plus strategy continuity from character_state |
+| Skip logic | Guided by node descriptions and broker state | Same |
+| Session awareness | None — fresh broker per turn | Within-session observations via character_state layer |
+| Broker summary | `get_state_summary()` implemented and wired | Same |
+
+The remaining gap is **session awareness** — the coordinator sees conversation history but has no within-session observations about what strategies were tried and how they landed. That requires the character_state / observation layer (not yet built).
 
 ---
 
 ## What Not to Change Without Reading This
 
 - Do not add new nodes without considering what coordinator-visible signal they produce
-- Do not change the coordinator prompt without adding broker state visibility
-- Do not assume the coordinator currently makes good routing decisions — it largely doesn't, because it can't
+- Do not change `get_state_summary()` without checking that the coordinator's routing logic still works with the new output
 - The `_MAX_NODES_PER_REQUEST = 20` limit in `orchestrator.py` is a safety valve; a well-functioning coordinator should complete in 6–9 nodes for a normal interaction

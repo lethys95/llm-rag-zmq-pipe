@@ -10,7 +10,7 @@ from src.nodes.orchestration.node_registry_decorator import register_node
 
 @register_node
 class MemoryAdvisorNode(BaseNode):
-    dependencies: list[str] = ["MemoryRetrievalNode", "MemoryEvaluationNode"]
+    dependencies: list[str] = ["MemoryRetrievalNode"]
     min_criticality: float = 0.2
 
     def __init__(self, memory_advisor_handler: MemoryAdvisorHandler) -> None:
@@ -27,9 +27,7 @@ class MemoryAdvisorNode(BaseNode):
             "preferences and facts extracted from earlier messages, and any unresolved threads "
             "worth acknowledging. Potency reflects how many meaningful memories were found "
             "(0.0=none retrieved, 1.0=rich relevant history). "
-            "Prefers broker.evaluated_memories (post-LLM ranking); falls back to broker.retrieved_documents "
-            "with stub evaluations if MemoryEvaluationNode did not run. "
-            "Skip only if both retrieved_documents and evaluated_memories are empty."
+            "Skip if broker.retrieved_documents is empty."
         )
 
     async def execute(self, broker: KnowledgeBroker) -> NodeResult:

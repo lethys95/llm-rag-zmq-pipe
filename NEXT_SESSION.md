@@ -69,10 +69,19 @@ are doing the advisor's job. The clean fix: classifier nodes produce structured 
 (scores, labels), advisor nodes own the LLM synthesis. Left as-is intentionally — it saves
 two LLM calls per turn and the quality is acceptable for now.
 
-**`emotional_state` suspended from broker path in NeedsAnalysis/ResponseStrategy nodes.**
-The VAD is produced and lives on the broker, but the classifier nodes pass
-`emotional_state=None` to their handlers. The handlers accept it but it never arrives.
-Needs wiring once the architecture is settled.
+**`emotional_state` in Qdrant is intentionally suspended — the design is unresolved.**
+`ConversationStorage` outcomments it (`emotional_state = None`) because storing a per-turn
+VAD snapshot alongside conversation entries doesn't carry enough useful signal. The VAD of a
+single message tells you how the user felt when they said something, not how they responded
+to what the companion said. Whether a strategy is working is a trajectory signal — it emerges
+across multiple turns, not within one.
+
+If emotional information belongs in long-term memory, the correct form is synthesised
+observations ("user has been progressively more open over the last four conversations"),
+not raw VAD scores. That form belongs to the character_state / observation layer, which
+is not yet designed. Do not wire `emotional_state` through to `ConversationStorage` until
+the reflection design is settled — the right structure will become clear from what the
+reflection process needs to read.
 
 **System prompts in all handlers are working stubs.** Quality is good enough for dev/testing
 but none have been systematically tuned from real outputs.
